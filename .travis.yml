@@ -1,0 +1,21 @@
+language: go
+go: 
+ - "1.11.x"
+
+os: osx
+
+install: true
+
+env:
+  global:
+    - GO111MODULE=on
+    - CODECOV_TOKEN="6b436247-e56d-41ec-ad0b-bfb3c70caac9"
+
+before_install:
+  - brew update
+  - brew install lame
+
+script: go test -race -coverprofile=coverage.txt -covermode=atomic ./...
+
+after_success:
+  - bash <(curl -s https://codecov.io/bash)
