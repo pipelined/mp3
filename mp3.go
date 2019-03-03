@@ -133,7 +133,7 @@ func (s *Sink) Sink(sourceID string, sampleRate, numChannels, bufferSize int) (f
 
 	return func(b [][]float64) error {
 		buf := new(bytes.Buffer)
-		ints := signal.Float64(b).AsInterInt(signal.BitDepth16)
+		ints := signal.Float64(b).AsInterInt(signal.BitDepth16, false)
 		for i := range ints {
 			if err := binary.Write(buf, binary.LittleEndian, int16(ints[i])); err != nil {
 				return err

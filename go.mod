@@ -1,8 +1,9 @@
 module github.com/pipelined/mp3
 
 require (
+	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/hajimehoshi/go-mp3 v0.1.1
-	github.com/pipelined/signal v0.0.0-20190218175838-c71a34013a33
+	github.com/pipelined/signal v0.0.0-20190303105250-40bacde8022c
 	github.com/stretchr/testify v1.3.0
-	github.com/viert/lame v0.0.0-20190110105750-70ad2f7ac5f2
+	github.com/viert/lame v0.0.0-20190220082140-eeec2ae207a2
 )
