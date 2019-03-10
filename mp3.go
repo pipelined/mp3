@@ -3,9 +3,7 @@ package mp3
 import (
 	"bytes"
 	"encoding/binary"
-	"fmt"
 	"io"
-	"os"
 
 	"github.com/viert/lame"
 
@@ -17,15 +15,14 @@ import (
 // Pump allows to read mp3 files.
 // This component cannot be reused for consequent runs.
 type Pump struct {
-	path string
-	f    *os.File
-	d    *mp3.Decoder
+	r io.ReadCloser
+	d *mp3.Decoder
 }
 
 // NewPump creates new mp3 Pump.
-func NewPump(path string) *Pump {
+func NewPump(r io.ReadCloser) *Pump {
 	return &Pump{
-		path: path,
+		r: r,
 	}
 }
 
@@ -33,17 +30,8 @@ func NewPump(path string) *Pump {
 func (p *Pump) Pump(sourceID string, bufferSize int) (func() ([][]float64, error), int, int, error) {
 	var err error
 
-	p.f, err = os.Open(p.path)
+	p.d, err = mp3.NewDecoder(p.r)
 	if err != nil {
-		return nil, 0, 0, err
-	}
-
-	p.d, err = mp3.NewDecoder(p.f)
-	if err != nil {
-		errClose := p.f.Close()
-		if err != nil {
-			return nil, 0, 0, fmt.Errorf("Failed to close file %v: %v caused by %v", p.path, errClose, err)
-		}
 		return nil, 0, 0, err
 	}
 
@@ -80,24 +68,18 @@ func (p *Pump) Pump(sourceID string, bufferSize int) (func() ([][]float64, error
 	}, sampleRate, numChannels, nil
 }
 
-// Flush all buffers.
-func (p *Pump) Flush(string) error {
-	return p.d.Close()
-}
-
 // Sink allows to send data to mp3 files.
 type Sink struct {
-	path    string
+	w       io.Writer
+	e       *lame.LameWriter
 	bitRate int
 	quality int
-	f       *os.File
-	wr      *lame.LameWriter
 }
 
 // NewSink creates new Sink.
-func NewSink(path string, bitRate int, quality int) *Sink {
+func NewSink(w io.Writer, bitRate int, quality int) *Sink {
 	s := Sink{
-		path:    path,
+		w:       w,
 		bitRate: bitRate,
 		quality: quality,
 	}
@@ -106,30 +88,19 @@ func NewSink(path string, bitRate int, quality int) *Sink {
 
 // Flush cleans up buffers.
 func (s *Sink) Flush(string) error {
-	err := s.wr.Close()
-	if err != nil {
-		return err
-	}
-
-	return s.f.Close()
+	return s.e.Close()
 }
 
 // Sink writes buffer into file.
 func (s *Sink) Sink(sourceID string, sampleRate, numChannels, bufferSize int) (func([][]float64) error, error) {
-	var err error
-	s.f, err = os.Create(s.path)
-	if err != nil {
-		return nil, err
-	}
-
-	s.wr = lame.NewWriter(s.f)
-	s.wr.Encoder.SetBitrate(s.bitRate)
-	s.wr.Encoder.SetQuality(s.quality)
-	s.wr.Encoder.SetNumChannels(int(numChannels))
-	s.wr.Encoder.SetInSamplerate(int(sampleRate))
-	s.wr.Encoder.SetMode(lame.JOINT_STEREO)
-	s.wr.Encoder.SetVBR(lame.VBR_RH)
-	s.wr.Encoder.InitParams()
+	s.e = lame.NewWriter(s.w)
+	s.e.Encoder.SetBitrate(s.bitRate)
+	s.e.Encoder.SetQuality(s.quality)
+	s.e.Encoder.SetNumChannels(int(numChannels))
+	s.e.Encoder.SetInSamplerate(int(sampleRate))
+	s.e.Encoder.SetMode(lame.JOINT_STEREO)
+	s.e.Encoder.SetVBR(lame.VBR_RH)
+	s.e.Encoder.InitParams()
 
 	return func(b [][]float64) error {
 		buf := new(bytes.Buffer)
@@ -139,7 +110,7 @@ func (s *Sink) Sink(sourceID string, sampleRate, numChannels, bufferSize int) (f
 				return err
 			}
 		}
-		if _, err := s.wr.Write(buf.Bytes()); err != nil {
+		if _, err := s.e.Write(buf.Bytes()); err != nil {
 			return err
 		}
 

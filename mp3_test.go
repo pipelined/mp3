@@ -1,6 +1,7 @@
 package mp3_test
 
 import (
+	"os"
 	"testing"
 
 	"github.com/pipelined/mp3"
@@ -14,7 +15,7 @@ const (
 	out2       = "_testdata/out2.mp3"
 )
 
-func TestMp3New(t *testing.T) {
+func TestMp3(t *testing.T) {
 
 	tests := []struct {
 		inFile  string
@@ -31,8 +32,13 @@ func TestMp3New(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		pump := mp3.NewPump(test.inFile)
-		sink := mp3.NewSink(test.outFile, 192, 2)
+		inFile, err := os.Open(test.inFile)
+		assert.Nil(t, err)
+		pump := mp3.NewPump(inFile)
+
+		outFile, err := os.Create(test.outFile)
+		assert.Nil(t, err)
+		sink := mp3.NewSink(outFile, 192, 2)
 
 		pumpFn, sampleRate, numChannles, err := pump.Pump("", bufferSize)
 		assert.NotNil(t, pumpFn)
@@ -53,9 +59,12 @@ func TestMp3New(t *testing.T) {
 			}
 		}
 
-		err = pump.Flush("")
-		assert.Nil(t, err)
 		err = sink.Flush("")
+		assert.Nil(t, err)
+
+		err = inFile.Close()
+		assert.Nil(t, err)
+		err = outFile.Close()
 		assert.Nil(t, err)
 	}
 }
