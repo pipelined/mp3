@@ -11,7 +11,7 @@ import (
 
 const (
 	bufferSize = 512
-	sample     = "_testdata/sample.mp3"
+	sample     = "_testdata/65.mp3"
 	out        = "_testdata/out"
 )
 
@@ -22,7 +22,6 @@ func TestMp3(t *testing.T) {
 		// outFile string
 		vbr     mp3.BitRateMode
 		bitRate int
-		quality int
 	}{
 		{
 			inFile:  sample,
@@ -39,13 +38,14 @@ func TestMp3(t *testing.T) {
 	for i, test := range tests {
 		inFile, err := os.Open(test.inFile)
 		assert.Nil(t, err)
-		pump := mp3.NewPump(inFile)
+		pump := mp3.Pump{Reader: inFile}
 
 		outFile, err := os.Create(fmt.Sprintf("%s_%d_%s_.mp3", out, i, test.vbr))
 		assert.Nil(t, err)
-		sink := mp3.NewSink(outFile, mp3.JointStereo, test.vbr, test.bitRate)
-		if test.quality != 0 {
-			sink.SetQuality(test.quality)
+		sink := mp3.CBRSink{
+			Writer:      outFile,
+			ChannelMode: mp3.JointStereo,
+			BitRate:     test.bitRate,
 		}
 
 		pumpFn, sampleRate, numChannles, err := pump.Pump("", bufferSize)

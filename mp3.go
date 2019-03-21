@@ -12,8 +12,9 @@ import (
 	mp3 "github.com/hajimehoshi/go-mp3"
 )
 
-// DefaultQuality for mp3 encoding.
-const DefaultQuality = 5
+// DefaultVBRQuality for algorithm quality selection of mp3 encoding.
+// This setting does not affect the filesize, but affects the speed of encoding.
+const DefaultVBRQuality = 3
 
 // ChannelMode determines how mp3 file will be encoded.
 type ChannelMode int
@@ -61,22 +62,15 @@ func (b BitRateMode) String() string {
 // Pump allows to read mp3 data.
 // This component cannot be reused for consequent runs.
 type Pump struct {
-	r io.ReadCloser
+	io.Reader
 	d *mp3.Decoder
-}
-
-// NewPump creates new mp3 Pump.
-func NewPump(r io.ReadCloser) *Pump {
-	return &Pump{
-		r: r,
-	}
 }
 
 // Pump reads buffer from mp3.
 func (p *Pump) Pump(sourceID string, bufferSize int) (func() ([][]float64, error), int, int, error) {
 	var err error
 
-	p.d, err = mp3.NewDecoder(p.r)
+	p.d, err = mp3.NewDecoder(p)
 	if err != nil {
 		return nil, 0, 0, err
 	}
@@ -114,47 +108,28 @@ func (p *Pump) Pump(sourceID string, bufferSize int) (func() ([][]float64, error
 	}, sampleRate, numChannels, nil
 }
 
-// Sink allows to send data to mp3 destinations.
-type Sink struct {
-	w           io.Writer
-	e           *lame.LameWriter
-	channelMode ChannelMode
-	bitRateMode BitRateMode
-	bitRate     int
-	quality     int
-}
-
-// NewSink creates new Sink. DefaultQuality is used.
-func NewSink(w io.Writer, cMode ChannelMode, brMode BitRateMode, bitRate int) *Sink {
-	s := Sink{
-		w:           w,
-		channelMode: cMode,
-		bitRateMode: brMode,
-		bitRate:     bitRate,
-		quality:     DefaultQuality,
-	}
-	return &s
-}
-
-// SetQuality allows to override DefaultQuality.
-func (s *Sink) SetQuality(q int) {
-	s.quality = q
+// CBRSink allows to send data to mp3 destinations with constant bit rate.
+// Audio quality varies in order to maintain constant bit rate.
+type CBRSink struct {
+	io.Writer
+	ChannelMode
+	BitRate int
+	e       *lame.LameWriter
 }
 
 // Flush cleans up buffers.
-func (s *Sink) Flush(string) error {
+func (s *CBRSink) Flush(string) error {
 	return s.e.Close()
 }
 
 // Sink writes buffer into destination.
-func (s *Sink) Sink(sourceID string, sampleRate, numChannels, bufferSize int) (func([][]float64) error, error) {
-	s.e = lame.NewWriter(s.w)
+func (s *CBRSink) Sink(sourceID string, sampleRate, numChannels, bufferSize int) (func([][]float64) error, error) {
+	s.e = lame.NewWriter(s)
 	s.e.Encoder.SetInSamplerate(sampleRate)
 	s.e.Encoder.SetNumChannels(numChannels)
-	s.setMode()
-	s.setVBR()
-	s.e.Encoder.SetBitrate(s.bitRate)
-	s.e.Encoder.SetVBRQuality(s.quality)
+	setBitRateMode(s.e, CBR)
+	setChannelMode(s.e, s.ChannelMode)
+	s.e.Encoder.SetBitrate(s.BitRate)
 	s.e.Encoder.InitParams()
 
 	return func(b [][]float64) error {
@@ -174,25 +149,25 @@ func (s *Sink) Sink(sourceID string, sampleRate, numChannels, bufferSize int) (f
 }
 
 // setMode assigns mode to the sink.
-func (s *Sink) setVBR() {
-	switch s.bitRateMode {
+func setBitRateMode(e *lame.LameWriter, br BitRateMode) {
+	switch br {
 	case CBR:
-		s.e.Encoder.SetVBR(lame.VBR_OFF)
+		e.Encoder.SetVBR(lame.VBR_OFF)
 	case VBR:
-		s.e.Encoder.SetVBR(lame.VBR_MTRH)
+		e.Encoder.SetVBR(lame.VBR_MTRH)
 	case ABR:
-		s.e.Encoder.SetVBR(lame.VBR_ABR)
+		e.Encoder.SetVBR(lame.VBR_ABR)
 	}
 }
 
 // setMode assigns mode to the sink.
-func (s Sink) setMode() {
-	switch s.channelMode {
+func setChannelMode(e *lame.LameWriter, cm ChannelMode) {
+	switch cm {
 	case JointStereo:
-		s.e.Encoder.SetMode(lame.JOINT_STEREO)
+		e.Encoder.SetMode(lame.JOINT_STEREO)
 	case Stereo:
-		s.e.Encoder.SetMode(lame.STEREO)
+		e.Encoder.SetMode(lame.STEREO)
 	case Mono:
-		s.e.Encoder.SetMode(lame.MONO)
+		e.Encoder.SetMode(lame.MONO)
 	}
 }
