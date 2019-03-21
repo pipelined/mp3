@@ -1,6 +1,7 @@
 package mp3_test
 
 import (
+	"fmt"
 	"os"
 	"testing"
 
@@ -11,34 +12,41 @@ import (
 const (
 	bufferSize = 512
 	sample     = "_testdata/sample.mp3"
-	out1       = "_testdata/out1.mp3"
-	out2       = "_testdata/out2.mp3"
+	out        = "_testdata/out"
 )
 
 func TestMp3(t *testing.T) {
 
 	tests := []struct {
-		inFile  string
-		outFile string
+		inFile string
+		// outFile string
+		vbr     mp3.BitRateMode
+		bitRate int
+		quality int
 	}{
 		{
 			inFile:  sample,
-			outFile: out1,
+			vbr:     mp3.CBR,
+			bitRate: 320,
 		},
 		{
-			inFile:  out1,
-			outFile: out2,
+			inFile:  sample,
+			vbr:     mp3.CBR,
+			bitRate: 192,
 		},
 	}
 
-	for _, test := range tests {
+	for i, test := range tests {
 		inFile, err := os.Open(test.inFile)
 		assert.Nil(t, err)
 		pump := mp3.NewPump(inFile)
 
-		outFile, err := os.Create(test.outFile)
+		outFile, err := os.Create(fmt.Sprintf("%s_%d_%s_.mp3", out, i, test.vbr))
 		assert.Nil(t, err)
-		sink := mp3.NewSink(outFile, 192, 2)
+		sink := mp3.NewSink(outFile, mp3.JointStereo, test.vbr, test.bitRate)
+		if test.quality != 0 {
+			sink.SetQuality(test.quality)
+		}
 
 		pumpFn, sampleRate, numChannles, err := pump.Pump("", bufferSize)
 		assert.NotNil(t, pumpFn)
