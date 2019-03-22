@@ -132,6 +132,38 @@ func (s *CBRSink) Sink(sourceID string, sampleRate, numChannels, bufferSize int)
 	s.e.Encoder.SetBitrate(s.BitRate)
 	s.e.Encoder.InitParams()
 
+	return sink(s.e), nil
+}
+
+// ABRSink allows to send data to mp3 destinations with averaged bit rate.
+// Audio quality and bit rate both vary. A cross between VBR and CBR.
+type ABRSink struct {
+	io.Writer
+	ChannelMode
+	BitRate int
+	e       *lame.LameWriter
+}
+
+// Flush cleans up buffers.
+func (s *ABRSink) Flush(string) error {
+	return s.e.Close()
+}
+
+// Sink writes buffer into destination.
+func (s *ABRSink) Sink(sourceID string, sampleRate, numChannels, bufferSize int) (func([][]float64) error, error) {
+	s.e = lame.NewWriter(s)
+	s.e.Encoder.SetInSamplerate(sampleRate)
+	s.e.Encoder.SetNumChannels(numChannels)
+	setBitRateMode(s.e, ABR)
+	setChannelMode(s.e, s.ChannelMode)
+	s.e.Encoder.SetVBRAverageBitRate(s.BitRate)
+	s.e.Encoder.InitParams()
+
+	return sink(s.e), nil
+}
+
+// sink is a generic sink closure for lame writer.
+func sink(w io.Writer) func([][]float64) error {
 	return func(b [][]float64) error {
 		buf := new(bytes.Buffer)
 		ints := signal.Float64(b).AsInterInt(signal.BitDepth16, false)
@@ -140,12 +172,11 @@ func (s *CBRSink) Sink(sourceID string, sampleRate, numChannels, bufferSize int)
 				return err
 			}
 		}
-		if _, err := s.e.Write(buf.Bytes()); err != nil {
+		if _, err := w.Write(buf.Bytes()); err != nil {
 			return err
 		}
-
 		return nil
-	}, nil
+	}
 }
 
 // setMode assigns mode to the sink.
