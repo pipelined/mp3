@@ -12,10 +12,6 @@ import (
 	mp3 "github.com/hajimehoshi/go-mp3"
 )
 
-// DefaultVBRQuality for algorithm quality selection of mp3 encoding.
-// This setting does not affect the filesize, but affects the speed of encoding.
-const DefaultVBRQuality = 3
-
 // ChannelMode determines how channel data will be encoded.
 type ChannelMode int
 
