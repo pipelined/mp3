@@ -151,14 +151,9 @@ func (s *CBRSink) Flush(string) error {
 // Sink writes buffer into destination.
 func (s *CBRSink) Sink(sourceID string, sampleRate, numChannels, bufferSize int) (func([][]float64) error, error) {
 	s.e = lame.NewWriter(s)
-	s.e.Encoder.SetInSamplerate(sampleRate)
-	s.e.Encoder.SetNumChannels(numChannels)
-	setBitRateMode(s.e, CBR)
-	setChannelMode(s.e, s.ChannelMode)
 	s.e.Encoder.SetBitrate(s.BitRate)
-	s.e.Encoder.InitParams()
 
-	return sink(s.e), nil
+	return sink(s.e, CBR, s.ChannelMode, sampleRate, numChannels), nil
 }
 
 // ABRSink allows to send data to mp3 destinations with averaged bit rate.
@@ -178,14 +173,9 @@ func (s *ABRSink) Flush(string) error {
 // Sink writes buffer into destination.
 func (s *ABRSink) Sink(sourceID string, sampleRate, numChannels, bufferSize int) (func([][]float64) error, error) {
 	s.e = lame.NewWriter(s)
-	s.e.Encoder.SetInSamplerate(sampleRate)
-	s.e.Encoder.SetNumChannels(numChannels)
-	setBitRateMode(s.e, ABR)
-	setChannelMode(s.e, s.ChannelMode)
 	s.e.Encoder.SetVBRAverageBitRate(s.BitRate)
-	s.e.Encoder.InitParams()
 
-	return sink(s.e), nil
+	return sink(s.e, ABR, s.ChannelMode, sampleRate, numChannels), nil
 }
 
 // VBRSink allows to send data to mp3 destinations with varied bit rate.
@@ -205,17 +195,17 @@ func (s *VBRSink) Flush(string) error {
 // Sink writes buffer into destination.
 func (s *VBRSink) Sink(sourceID string, sampleRate, numChannels, bufferSize int) (func([][]float64) error, error) {
 	s.e = lame.NewWriter(s)
-	s.e.Encoder.SetInSamplerate(sampleRate)
-	s.e.Encoder.SetNumChannels(numChannels)
-	setBitRateMode(s.e, VBR)
-	setChannelMode(s.e, s.ChannelMode)
 	s.e.Encoder.SetVBRQuality(int(s.VBRQuality))
-	s.e.Encoder.InitParams()
-	return sink(s.e), nil
+	return sink(s.e, VBR, s.ChannelMode, sampleRate, numChannels), nil
 }
 
 // sink is a generic sink closure for lame writer.
-func sink(w io.Writer) func([][]float64) error {
+func sink(e *lame.LameWriter, bitRateMode BitRateMode, channelMode ChannelMode, sampleRate, numChannels int) func([][]float64) error {
+	setBitRateMode(e, bitRateMode)
+	setChannelMode(e, channelMode)
+	e.Encoder.SetInSamplerate(sampleRate)
+	e.Encoder.SetNumChannels(numChannels)
+	e.Encoder.InitParams()
 	return func(b [][]float64) error {
 		buf := new(bytes.Buffer)
 		ints := signal.Float64(b).AsInterInt(signal.BitDepth16, false)
@@ -224,7 +214,7 @@ func sink(w io.Writer) func([][]float64) error {
 				return err
 			}
 		}
-		if _, err := w.Write(buf.Bytes()); err != nil {
+		if _, err := e.Write(buf.Bytes()); err != nil {
 			return err
 		}
 		return nil
