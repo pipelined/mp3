@@ -16,7 +16,7 @@ import (
 // This setting does not affect the filesize, but affects the speed of encoding.
 const DefaultVBRQuality = 3
 
-// ChannelMode determines how mp3 file will be encoded.
+// ChannelMode determines how channel data will be encoded.
 type ChannelMode int
 
 const (
@@ -44,6 +44,32 @@ const (
 	ABR
 	// VBR uses variable bit rate.
 	VBR
+)
+
+// VBRQuality determines VBR quality level.
+type VBRQuality int
+
+const (
+	// VBR0 results in 220–260 Kbps
+	VBR0 = VBRQuality(iota)
+	// VBR1 results in 190–250 Kbps
+	VBR1
+	// VBR2 results in 170–210 Kbps
+	VBR2
+	// VBR3 results in 150–195 Kbps
+	VBR3
+	// VBR4 results in 140–185 Kbps
+	VBR4
+	// VBR5 results in 120–150 Kbps
+	VBR5
+	// VBR6 results in 100–130 Kbps
+	VBR6
+	// VBR7 results in 80 - 110 Kbps
+	VBR7
+	// VBR8 results in 70 - 95 Kbps
+	VBR8
+	// VBR9 results in 60 - 80 Kbps
+	VBR9
 )
 
 func (b BitRateMode) String() string {
@@ -159,6 +185,32 @@ func (s *ABRSink) Sink(sourceID string, sampleRate, numChannels, bufferSize int)
 	s.e.Encoder.SetVBRAverageBitRate(s.BitRate)
 	s.e.Encoder.InitParams()
 
+	return sink(s.e), nil
+}
+
+// VBRSink allows to send data to mp3 destinations with varied bit rate.
+// Bit rate varies in order to maintain constant audio quality.
+type VBRSink struct {
+	io.Writer
+	ChannelMode
+	VBRQuality
+	e *lame.LameWriter
+}
+
+// Flush cleans up buffers.
+func (s *VBRSink) Flush(string) error {
+	return s.e.Close()
+}
+
+// Sink writes buffer into destination.
+func (s *VBRSink) Sink(sourceID string, sampleRate, numChannels, bufferSize int) (func([][]float64) error, error) {
+	s.e = lame.NewWriter(s)
+	s.e.Encoder.SetInSamplerate(sampleRate)
+	s.e.Encoder.SetNumChannels(numChannels)
+	setBitRateMode(s.e, VBR)
+	setChannelMode(s.e, s.ChannelMode)
+	s.e.Encoder.SetVBRQuality(int(s.VBRQuality))
+	s.e.Encoder.InitParams()
 	return sink(s.e), nil
 }
 
