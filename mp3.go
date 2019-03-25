@@ -130,26 +130,30 @@ func (p *Pump) Pump(sourceID string, bufferSize int) (func() ([][]float64, error
 	}, sampleRate, numChannels, nil
 }
 
+type sink struct {
+	*lame.LameWriter
+}
+
+// Flush cleans up buffers.
+func (s sink) Flush(string) error {
+	return s.Close()
+}
+
 // CBRSink allows to send data to mp3 destinations with constant bit rate.
 // Audio quality varies in order to maintain constant bit rate.
 type CBRSink struct {
 	io.Writer
 	ChannelMode
 	BitRate int
-	e       *lame.LameWriter
-}
-
-// Flush cleans up buffers.
-func (s *CBRSink) Flush(string) error {
-	return s.e.Close()
+	sink
 }
 
 // Sink writes buffer into destination.
 func (s *CBRSink) Sink(sourceID string, sampleRate, numChannels, bufferSize int) (func([][]float64) error, error) {
-	s.e = lame.NewWriter(s)
-	s.e.Encoder.SetBitrate(s.BitRate)
+	s.LameWriter = lame.NewWriter(s)
+	s.Encoder.SetBitrate(s.BitRate)
 
-	return sink(s.e, CBR, s.ChannelMode, sampleRate, numChannels), nil
+	return sinkFn(s.LameWriter, CBR, s.ChannelMode, sampleRate, numChannels), nil
 }
 
 // ABRSink allows to send data to mp3 destinations with averaged bit rate.
@@ -158,20 +162,15 @@ type ABRSink struct {
 	io.Writer
 	ChannelMode
 	BitRate int
-	e       *lame.LameWriter
-}
-
-// Flush cleans up buffers.
-func (s *ABRSink) Flush(string) error {
-	return s.e.Close()
+	sink
 }
 
 // Sink writes buffer into destination.
 func (s *ABRSink) Sink(sourceID string, sampleRate, numChannels, bufferSize int) (func([][]float64) error, error) {
-	s.e = lame.NewWriter(s)
-	s.e.Encoder.SetVBRAverageBitRate(s.BitRate)
+	s.LameWriter = lame.NewWriter(s)
+	s.Encoder.SetVBRAverageBitRate(s.BitRate)
 
-	return sink(s.e, ABR, s.ChannelMode, sampleRate, numChannels), nil
+	return sinkFn(s.LameWriter, ABR, s.ChannelMode, sampleRate, numChannels), nil
 }
 
 // VBRSink allows to send data to mp3 destinations with varied bit rate.
@@ -180,23 +179,18 @@ type VBRSink struct {
 	io.Writer
 	ChannelMode
 	VBRQuality
-	e *lame.LameWriter
-}
-
-// Flush cleans up buffers.
-func (s *VBRSink) Flush(string) error {
-	return s.e.Close()
+	sink
 }
 
 // Sink writes buffer into destination.
 func (s *VBRSink) Sink(sourceID string, sampleRate, numChannels, bufferSize int) (func([][]float64) error, error) {
-	s.e = lame.NewWriter(s)
-	s.e.Encoder.SetVBRQuality(int(s.VBRQuality))
-	return sink(s.e, VBR, s.ChannelMode, sampleRate, numChannels), nil
+	s.LameWriter = lame.NewWriter(s)
+	s.Encoder.SetVBRQuality(int(s.VBRQuality))
+	return sinkFn(s.LameWriter, VBR, s.ChannelMode, sampleRate, numChannels), nil
 }
 
 // sink is a generic sink closure for lame writer.
-func sink(e *lame.LameWriter, bitRateMode BitRateMode, channelMode ChannelMode, sampleRate, numChannels int) func([][]float64) error {
+func sinkFn(e *lame.LameWriter, bitRateMode BitRateMode, channelMode ChannelMode, sampleRate, numChannels int) func([][]float64) error {
 	setBitRateMode(e, bitRateMode)
 	setChannelMode(e, channelMode)
 	e.Encoder.SetInSamplerate(sampleRate)
