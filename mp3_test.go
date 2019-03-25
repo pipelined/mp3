@@ -19,15 +19,18 @@ const (
 type sink interface {
 	pipe.Sink
 	pipe.Flusher
+	SetQuality(mp3.Quality)
 }
 
 func TestMp3(t *testing.T) {
 
 	tests := []struct {
-		inFile  string
-		vbr     mp3.BitRateMode
-		bitRate int
-		quality mp3.VBRQuality
+		inFile     string
+		vbr        mp3.BitRateMode
+		bitRate    int
+		vbrQuality mp3.VBRQuality
+		useQuality bool
+		quality    mp3.Quality
 	}{
 		{
 			inFile:  sample,
@@ -50,14 +53,35 @@ func TestMp3(t *testing.T) {
 			bitRate: 128,
 		},
 		{
-			inFile:  sample,
-			vbr:     mp3.VBR,
-			quality: mp3.VBR0,
+			inFile:     sample,
+			vbr:        mp3.VBR,
+			vbrQuality: mp3.VBR0,
 		},
 		{
-			inFile:  sample,
-			vbr:     mp3.VBR,
-			quality: mp3.VBR9,
+			inFile:     sample,
+			vbr:        mp3.VBR,
+			vbrQuality: mp3.VBR9,
+		},
+		{
+			inFile:     sample,
+			vbr:        mp3.VBR,
+			vbrQuality: mp3.VBR0,
+			useQuality: true,
+			quality:    mp3.Q0,
+		},
+		{
+			inFile:     sample,
+			vbr:        mp3.VBR,
+			vbrQuality: mp3.VBR0,
+			useQuality: true,
+			quality:    mp3.Q9,
+		},
+		{
+			inFile:     sample,
+			vbr:        mp3.VBR,
+			vbrQuality: mp3.VBR0,
+			useQuality: true,
+			quality:    mp3.Q3,
 		},
 	}
 
@@ -86,8 +110,11 @@ func TestMp3(t *testing.T) {
 			sink = &mp3.VBRSink{
 				Writer:      outFile,
 				ChannelMode: mp3.JointStereo,
-				VBRQuality:  test.quality,
+				VBRQuality:  test.vbrQuality,
 			}
+		}
+		if test.useQuality {
+			sink.SetQuality(test.quality)
 		}
 
 		pumpFn, sampleRate, numChannles, err := pump.Pump("", bufferSize)

@@ -42,29 +42,29 @@ const (
 	VBR
 )
 
-// VBRQuality determines VBR quality level.
+// VBRQuality determines VBR quality level. Use VBR{0-9} constants for values.
 type VBRQuality int
 
 const (
-	// VBR0 results in 220–260 Kbps
+	// VBR0 results in 220 – 260 Kbps.
 	VBR0 = VBRQuality(iota)
-	// VBR1 results in 190–250 Kbps
+	// VBR1 results in 190 – 250 Kbps.
 	VBR1
-	// VBR2 results in 170–210 Kbps
+	// VBR2 results in 170 – 210 Kbps.
 	VBR2
-	// VBR3 results in 150–195 Kbps
+	// VBR3 results in 150 – 195 Kbps.
 	VBR3
-	// VBR4 results in 140–185 Kbps
+	// VBR4 results in 140 – 185 Kbps.
 	VBR4
-	// VBR5 results in 120–150 Kbps
+	// VBR5 results in 120 – 150 Kbps.
 	VBR5
-	// VBR6 results in 100–130 Kbps
+	// VBR6 results in 100 – 130 Kbps.
 	VBR6
-	// VBR7 results in 80 - 110 Kbps
+	// VBR7 results in 80 - 110 Kbps.
 	VBR7
-	// VBR8 results in 70 - 95 Kbps
+	// VBR8 results in 70 - 95 Kbps.
 	VBR8
-	// VBR9 results in 60 - 80 Kbps
+	// VBR9 results in 60 - 80 Kbps.
 	VBR9
 )
 
@@ -130,13 +130,47 @@ func (p *Pump) Pump(sourceID string, bufferSize int) (func() ([][]float64, error
 	}, sampleRate, numChannels, nil
 }
 
+// Quality determines encoding algorithm quality. It doesn't affect file size.
+// Use Q{0-9} constants for function calls. It is strictly optional.
+type Quality int
+
+const (
+	// Q0 sets maximum quality algorithm selection.
+	Q0 = Quality(iota)
+	// Q1 sets quality to 1.
+	Q1
+	// Q2 sets quality to 2.
+	Q2
+	// Q3 sets quality to 3. This is the value used by default.
+	Q3
+	// Q4 sets quality to 4.
+	Q4
+	// Q5 sets quality to 5.
+	Q5
+	// Q6 sets quality to 6.
+	Q6
+	// Q7 sets quality to 7.
+	Q7
+	// Q8 sets quality to 8.
+	Q8
+	// Q9 sets minimum quality algorithm selection.
+	Q9
+)
+
 type sink struct {
-	w *lame.LameWriter
+	quality *Quality
+	w       *lame.LameWriter
 }
 
 // Flush cleans up buffers.
-func (s sink) Flush(string) error {
+func (s *sink) Flush(string) error {
 	return s.w.Close()
+}
+
+// SetQuality sets the quality to the lame encoder.
+// Q3 is used if you don't call this method.
+func (s *sink) SetQuality(q Quality) {
+	s.quality = &q
 }
 
 // CBRSink allows to send data to mp3 destinations with constant bit rate.
@@ -153,7 +187,7 @@ func (s *CBRSink) Sink(sourceID string, sampleRate, numChannels, bufferSize int)
 	s.w = lame.NewWriter(s)
 	s.w.Encoder.SetBitrate(s.BitRate)
 
-	return sinkFn(s.w, CBR, s.ChannelMode, sampleRate, numChannels), nil
+	return sinkFn(s.sink, CBR, s.ChannelMode, sampleRate, numChannels), nil
 }
 
 // ABRSink allows to send data to mp3 destinations with averaged bit rate.
@@ -170,7 +204,7 @@ func (s *ABRSink) Sink(sourceID string, sampleRate, numChannels, bufferSize int)
 	s.w = lame.NewWriter(s)
 	s.w.Encoder.SetVBRAverageBitRate(s.BitRate)
 
-	return sinkFn(s.w, ABR, s.ChannelMode, sampleRate, numChannels), nil
+	return sinkFn(s.sink, ABR, s.ChannelMode, sampleRate, numChannels), nil
 }
 
 // VBRSink allows to send data to mp3 destinations with varied bit rate.
@@ -186,16 +220,20 @@ type VBRSink struct {
 func (s *VBRSink) Sink(sourceID string, sampleRate, numChannels, bufferSize int) (func([][]float64) error, error) {
 	s.w = lame.NewWriter(s)
 	s.w.Encoder.SetVBRQuality(int(s.VBRQuality))
-	return sinkFn(s.w, VBR, s.ChannelMode, sampleRate, numChannels), nil
+	return sinkFn(s.sink, VBR, s.ChannelMode, sampleRate, numChannels), nil
 }
 
 // sink is a generic sink closure for lame writer.
-func sinkFn(e *lame.LameWriter, bitRateMode BitRateMode, channelMode ChannelMode, sampleRate, numChannels int) func([][]float64) error {
-	setBitRateMode(e, bitRateMode)
-	setChannelMode(e, channelMode)
-	e.Encoder.SetInSamplerate(sampleRate)
-	e.Encoder.SetNumChannels(numChannels)
-	e.Encoder.InitParams()
+func sinkFn(s sink, bitRateMode BitRateMode, channelMode ChannelMode, sampleRate, numChannels int) func([][]float64) error {
+	if s.quality != nil {
+		q := *s.quality
+		s.w.Encoder.SetQuality(int(q))
+	}
+	setBitRateMode(s.w, bitRateMode)
+	setChannelMode(s.w, channelMode)
+	s.w.Encoder.SetInSamplerate(sampleRate)
+	s.w.Encoder.SetNumChannels(numChannels)
+	s.w.Encoder.InitParams()
 	return func(b [][]float64) error {
 		buf := new(bytes.Buffer)
 		ints := signal.Float64(b).AsInterInt(signal.BitDepth16, false)
@@ -204,7 +242,7 @@ func sinkFn(e *lame.LameWriter, bitRateMode BitRateMode, channelMode ChannelMode
 				return err
 			}
 		}
-		if _, err := e.Write(buf.Bytes()); err != nil {
+		if _, err := s.w.Write(buf.Bytes()); err != nil {
 			return err
 		}
 		return nil
