@@ -131,12 +131,12 @@ func (p *Pump) Pump(sourceID string, bufferSize int) (func() ([][]float64, error
 }
 
 type sink struct {
-	*lame.LameWriter
+	w *lame.LameWriter
 }
 
 // Flush cleans up buffers.
 func (s sink) Flush(string) error {
-	return s.Close()
+	return s.w.Close()
 }
 
 // CBRSink allows to send data to mp3 destinations with constant bit rate.
@@ -150,10 +150,10 @@ type CBRSink struct {
 
 // Sink writes buffer into destination.
 func (s *CBRSink) Sink(sourceID string, sampleRate, numChannels, bufferSize int) (func([][]float64) error, error) {
-	s.LameWriter = lame.NewWriter(s)
-	s.Encoder.SetBitrate(s.BitRate)
+	s.w = lame.NewWriter(s)
+	s.w.Encoder.SetBitrate(s.BitRate)
 
-	return sinkFn(s.LameWriter, CBR, s.ChannelMode, sampleRate, numChannels), nil
+	return sinkFn(s.w, CBR, s.ChannelMode, sampleRate, numChannels), nil
 }
 
 // ABRSink allows to send data to mp3 destinations with averaged bit rate.
@@ -167,10 +167,10 @@ type ABRSink struct {
 
 // Sink writes buffer into destination.
 func (s *ABRSink) Sink(sourceID string, sampleRate, numChannels, bufferSize int) (func([][]float64) error, error) {
-	s.LameWriter = lame.NewWriter(s)
-	s.Encoder.SetVBRAverageBitRate(s.BitRate)
+	s.w = lame.NewWriter(s)
+	s.w.Encoder.SetVBRAverageBitRate(s.BitRate)
 
-	return sinkFn(s.LameWriter, ABR, s.ChannelMode, sampleRate, numChannels), nil
+	return sinkFn(s.w, ABR, s.ChannelMode, sampleRate, numChannels), nil
 }
 
 // VBRSink allows to send data to mp3 destinations with varied bit rate.
@@ -184,9 +184,9 @@ type VBRSink struct {
 
 // Sink writes buffer into destination.
 func (s *VBRSink) Sink(sourceID string, sampleRate, numChannels, bufferSize int) (func([][]float64) error, error) {
-	s.LameWriter = lame.NewWriter(s)
-	s.Encoder.SetVBRQuality(int(s.VBRQuality))
-	return sinkFn(s.LameWriter, VBR, s.ChannelMode, sampleRate, numChannels), nil
+	s.w = lame.NewWriter(s)
+	s.w.Encoder.SetVBRQuality(int(s.VBRQuality))
+	return sinkFn(s.w, VBR, s.ChannelMode, sampleRate, numChannels), nil
 }
 
 // sink is a generic sink closure for lame writer.
