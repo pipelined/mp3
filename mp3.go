@@ -7,6 +7,7 @@ import (
 
 	"github.com/viert/lame"
 
+	"github.com/pipelined/pipe"
 	"github.com/pipelined/signal"
 
 	mp3 "github.com/hajimehoshi/go-mp3"
@@ -157,6 +158,20 @@ const (
 	Q9
 )
 
+// Sink is a generic mp3 sink interface. It is implemented by:
+//
+//		VBRSink: encodes with variable bit rate
+//		CBRSink: encodes with constant bit rate
+//		ABRSink: encodes with average bit rate
+//
+// They also have different encoding parameters.
+type Sink interface {
+	pipe.Sink
+	pipe.Flusher
+	SetQuality(Quality)
+}
+
+// sink wraps LameWriter and contains generic logic.
 type sink struct {
 	quality *Quality
 	w       *lame.LameWriter
@@ -223,7 +238,7 @@ func (s *VBRSink) Sink(sourceID string, sampleRate, numChannels, bufferSize int)
 	return sinkFn(s.sink, VBR, s.ChannelMode, sampleRate, numChannels), nil
 }
 
-// sink is a generic sink closure for lame writer.
+// sinkFn is a generic sink closure for lame writer.
 func sinkFn(s sink, bitRateMode BitRateMode, channelMode ChannelMode, sampleRate, numChannels int) func([][]float64) error {
 	if s.quality != nil {
 		q := *s.quality

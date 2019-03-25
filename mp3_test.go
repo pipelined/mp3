@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/pipelined/mp3"
-	"github.com/pipelined/pipe"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -15,12 +14,6 @@ const (
 	sample     = "_testdata/sample.mp3"
 	out        = "_testdata/out"
 )
-
-type sink interface {
-	pipe.Sink
-	pipe.Flusher
-	SetQuality(mp3.Quality)
-}
 
 func TestMp3(t *testing.T) {
 
@@ -92,7 +85,7 @@ func TestMp3(t *testing.T) {
 
 		outFile, err := os.Create(fmt.Sprintf("%s_%d_%s.mp3", out, i, test.vbr))
 		assert.Nil(t, err)
-		var sink sink
+		var sink mp3.Sink
 		switch test.vbr {
 		case mp3.CBR:
 			sink = &mp3.CBRSink{
