@@ -18,63 +18,87 @@ const (
 func TestMp3(t *testing.T) {
 
 	tests := []struct {
-		inFile     string
-		vbr        mp3.BitRateMode
-		bitRate    int
-		vbrQuality mp3.VBRQuality
-		useQuality bool
-		quality    mp3.Quality
+		inFile      string
+		vbr         mp3.BitRateMode
+		channelMode mp3.ChannelMode
+		bitRate     int
+		vbrQuality  mp3.VBRQuality
+		useQuality  bool
+		quality     mp3.Quality
 	}{
 		{
-			inFile:  sample,
-			vbr:     mp3.CBR,
-			bitRate: 320,
+			inFile:      sample,
+			channelMode: mp3.JointStereo,
+			vbr:         mp3.CBR,
+			bitRate:     320,
 		},
 		{
-			inFile:  sample,
-			vbr:     mp3.CBR,
-			bitRate: 192,
+			inFile:      sample,
+			channelMode: mp3.JointStereo,
+			vbr:         mp3.CBR,
+			bitRate:     192,
 		},
 		{
-			inFile:  sample,
-			vbr:     mp3.ABR,
-			bitRate: 220,
+			inFile:      sample,
+			channelMode: mp3.JointStereo,
+			vbr:         mp3.ABR,
+			bitRate:     220,
 		},
 		{
-			inFile:  sample,
-			vbr:     mp3.ABR,
-			bitRate: 128,
+			inFile:      sample,
+			channelMode: mp3.JointStereo,
+			vbr:         mp3.ABR,
+			bitRate:     128,
 		},
 		{
-			inFile:     sample,
-			vbr:        mp3.VBR,
-			vbrQuality: mp3.VBR0,
+			inFile:      sample,
+			channelMode: mp3.JointStereo,
+			vbr:         mp3.VBR,
+			vbrQuality:  mp3.VBR0,
 		},
 		{
-			inFile:     sample,
-			vbr:        mp3.VBR,
-			vbrQuality: mp3.VBR9,
+			inFile:      sample,
+			channelMode: mp3.JointStereo,
+			vbr:         mp3.VBR,
+			vbrQuality:  mp3.VBR9,
 		},
 		{
-			inFile:     sample,
-			vbr:        mp3.VBR,
-			vbrQuality: mp3.VBR0,
-			useQuality: true,
-			quality:    mp3.Q0,
+			inFile:      sample,
+			channelMode: mp3.Mono,
+			vbr:         mp3.VBR,
+			vbrQuality:  mp3.VBR9,
 		},
 		{
-			inFile:     sample,
-			vbr:        mp3.VBR,
-			vbrQuality: mp3.VBR0,
-			useQuality: true,
-			quality:    mp3.Q9,
+			inFile:      sample,
+			channelMode: mp3.Mono,
+			vbr:         mp3.VBR,
+			vbrQuality:  mp3.VBR9,
+			useQuality:  true,
+			quality:     9,
 		},
 		{
-			inFile:     sample,
-			vbr:        mp3.VBR,
-			vbrQuality: mp3.VBR0,
-			useQuality: true,
-			quality:    mp3.Q3,
+			inFile:      sample,
+			channelMode: mp3.JointStereo,
+			vbr:         mp3.VBR,
+			vbrQuality:  mp3.VBR0,
+			useQuality:  true,
+			quality:     mp3.Q0,
+		},
+		{
+			inFile:      sample,
+			channelMode: mp3.JointStereo,
+			vbr:         mp3.VBR,
+			vbrQuality:  mp3.VBR0,
+			useQuality:  true,
+			quality:     mp3.Q9,
+		},
+		{
+			inFile:      sample,
+			channelMode: mp3.Stereo,
+			vbr:         mp3.VBR,
+			vbrQuality:  mp3.VBR0,
+			useQuality:  true,
+			quality:     mp3.Q3,
 		},
 	}
 
@@ -90,19 +114,19 @@ func TestMp3(t *testing.T) {
 		case mp3.CBR:
 			sink = &mp3.CBRSink{
 				Writer:      outFile,
-				ChannelMode: mp3.JointStereo,
+				ChannelMode: test.channelMode,
 				BitRate:     test.bitRate,
 			}
 		case mp3.ABR:
 			sink = &mp3.ABRSink{
 				Writer:      outFile,
-				ChannelMode: mp3.JointStereo,
+				ChannelMode: test.channelMode,
 				BitRate:     test.bitRate,
 			}
 		case mp3.VBR:
 			sink = &mp3.VBRSink{
 				Writer:      outFile,
-				ChannelMode: mp3.JointStereo,
+				ChannelMode: test.channelMode,
 				VBRQuality:  test.vbrQuality,
 			}
 		}
