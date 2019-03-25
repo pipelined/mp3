@@ -1,6 +1,7 @@
 package mp3_test
 
 import (
+	"fmt"
 	"os"
 	"testing"
 
@@ -11,34 +12,127 @@ import (
 const (
 	bufferSize = 512
 	sample     = "_testdata/sample.mp3"
-	out1       = "_testdata/out1.mp3"
-	out2       = "_testdata/out2.mp3"
+	out        = "_testdata/out"
 )
 
 func TestMp3(t *testing.T) {
 
 	tests := []struct {
-		inFile  string
-		outFile string
+		inFile      string
+		vbr         mp3.BitRateMode
+		channelMode mp3.ChannelMode
+		bitRate     int
+		vbrQuality  mp3.VBRQuality
+		useQuality  bool
+		quality     mp3.Quality
 	}{
 		{
-			inFile:  sample,
-			outFile: out1,
+			inFile:      sample,
+			channelMode: mp3.JointStereo,
+			vbr:         mp3.CBR,
+			bitRate:     320,
 		},
 		{
-			inFile:  out1,
-			outFile: out2,
+			inFile:      sample,
+			channelMode: mp3.JointStereo,
+			vbr:         mp3.CBR,
+			bitRate:     192,
+		},
+		{
+			inFile:      sample,
+			channelMode: mp3.JointStereo,
+			vbr:         mp3.ABR,
+			bitRate:     220,
+		},
+		{
+			inFile:      sample,
+			channelMode: mp3.JointStereo,
+			vbr:         mp3.ABR,
+			bitRate:     128,
+		},
+		{
+			inFile:      sample,
+			channelMode: mp3.JointStereo,
+			vbr:         mp3.VBR,
+			vbrQuality:  mp3.VBR0,
+		},
+		{
+			inFile:      sample,
+			channelMode: mp3.JointStereo,
+			vbr:         mp3.VBR,
+			vbrQuality:  mp3.VBR9,
+		},
+		{
+			inFile:      sample,
+			channelMode: mp3.Mono,
+			vbr:         mp3.VBR,
+			vbrQuality:  mp3.VBR9,
+		},
+		{
+			inFile:      sample,
+			channelMode: mp3.Mono,
+			vbr:         mp3.VBR,
+			vbrQuality:  mp3.VBR9,
+			useQuality:  true,
+			quality:     9,
+		},
+		{
+			inFile:      sample,
+			channelMode: mp3.JointStereo,
+			vbr:         mp3.VBR,
+			vbrQuality:  mp3.VBR0,
+			useQuality:  true,
+			quality:     mp3.Q0,
+		},
+		{
+			inFile:      sample,
+			channelMode: mp3.JointStereo,
+			vbr:         mp3.VBR,
+			vbrQuality:  mp3.VBR0,
+			useQuality:  true,
+			quality:     mp3.Q9,
+		},
+		{
+			inFile:      sample,
+			channelMode: mp3.Stereo,
+			vbr:         mp3.VBR,
+			vbrQuality:  mp3.VBR0,
+			useQuality:  true,
+			quality:     mp3.Q3,
 		},
 	}
 
-	for _, test := range tests {
+	for i, test := range tests {
 		inFile, err := os.Open(test.inFile)
 		assert.Nil(t, err)
-		pump := mp3.NewPump(inFile)
+		pump := mp3.Pump{Reader: inFile}
 
-		outFile, err := os.Create(test.outFile)
+		outFile, err := os.Create(fmt.Sprintf("%s_%d_%s.mp3", out, i, test.vbr))
 		assert.Nil(t, err)
-		sink := mp3.NewSink(outFile, 192, 2)
+		var sink mp3.Sink
+		switch test.vbr {
+		case mp3.CBR:
+			sink = &mp3.CBRSink{
+				Writer:      outFile,
+				ChannelMode: test.channelMode,
+				BitRate:     test.bitRate,
+			}
+		case mp3.ABR:
+			sink = &mp3.ABRSink{
+				Writer:      outFile,
+				ChannelMode: test.channelMode,
+				BitRate:     test.bitRate,
+			}
+		case mp3.VBR:
+			sink = &mp3.VBRSink{
+				Writer:      outFile,
+				ChannelMode: test.channelMode,
+				VBRQuality:  test.vbrQuality,
+			}
+		}
+		if test.useQuality {
+			sink.SetQuality(test.quality)
+		}
 
 		pumpFn, sampleRate, numChannles, err := pump.Pump("", bufferSize)
 		assert.NotNil(t, pumpFn)
