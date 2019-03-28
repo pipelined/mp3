@@ -41,6 +41,11 @@ const (
 	ABR
 	// VBR uses variable bit rate.
 	VBR
+
+	// MinBitRate is the minimal bit rate value that could be used for CBR/ABR sinks.
+	MinBitRate = 8
+	// MaxBitRate is the maximal bit rate value that could be used for CBR/ABR sinks.
+	MaxBitRate = 320
 )
 
 // VBRQuality determines VBR quality level. Use VBR{0-9} constants for values.
