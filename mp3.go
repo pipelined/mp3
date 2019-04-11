@@ -1,8 +1,11 @@
 package mp3
 
+//go:generate stringer -type=ChannelMode,BitRateMode -output=stringers.go
+
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"io"
 
 	"github.com/viert/lame"
@@ -19,7 +22,7 @@ type ChannelMode int
 const (
 	// Mono forcibly generates a mono file. If the input file is a stereo file,
 	// the input stream will be read as a mono by averaging the left and right channels.
-	Mono = ChannelMode(iota)
+	Mono ChannelMode = iota
 	// Stereo makes no use of potential similarity between the two input channels.
 	// It can, however, negotiate the bit demand between both channels, i.e. give
 	// one channel more bits if the other contains silence.
@@ -36,55 +39,48 @@ type BitRateMode int
 
 const (
 	// CBR uses constant bit rate.
-	CBR = BitRateMode(iota)
+	CBR BitRateMode = iota
 	// ABR uses average bit rate.
 	ABR
 	// VBR uses variable bit rate.
 	VBR
+)
 
+const (
 	// MinBitRate is the minimal bit rate value that could be used for CBR/ABR sinks.
 	MinBitRate = 8
 	// MaxBitRate is the maximal bit rate value that could be used for CBR/ABR sinks.
 	MaxBitRate = 320
+	// DefaultExtension of mp3 files.
+	DefaultExtension = ".mp3"
 )
 
-// VBRQuality determines VBR quality level. Use VBR{0-9} constants for values.
-type VBRQuality int
-
-const (
-	// VBR0 results in 220 – 260 Kbps.
-	VBR0 = VBRQuality(iota)
-	// VBR1 results in 190 – 250 Kbps.
-	VBR1
-	// VBR2 results in 170 – 210 Kbps.
-	VBR2
-	// VBR3 results in 150 – 195 Kbps.
-	VBR3
-	// VBR4 results in 140 – 185 Kbps.
-	VBR4
-	// VBR5 results in 120 – 150 Kbps.
-	VBR5
-	// VBR6 results in 100 – 130 Kbps.
-	VBR6
-	// VBR7 results in 80 - 110 Kbps.
-	VBR7
-	// VBR8 results in 70 - 95 Kbps.
-	VBR8
-	// VBR9 results in 60 - 80 Kbps.
-	VBR9
-)
-
-func (b BitRateMode) String() string {
-	switch b {
-	case CBR:
-		return "CBR"
-	case VBR:
-		return "VBR"
-	case ABR:
-		return "ABR"
-	default:
-		return "Unsupported"
+var (
+	// Supported values for convert configuration.
+	Supported = struct {
+		BitRateModes map[BitRateMode]struct{}
+		ChannelModes map[ChannelMode]struct{}
+	}{
+		BitRateModes: map[BitRateMode]struct{}{
+			CBR: {},
+			VBR: {},
+			ABR: {},
+		},
+		ChannelModes: map[ChannelMode]struct{}{
+			JointStereo: {},
+			Stereo:      {},
+			Mono:        {},
+		},
 	}
+	// extensions of mp3 files.
+	extensions = []string{
+		DefaultExtension,
+	}
+)
+
+// Extensions of mp3 files.
+func Extensions() []string {
+	return extensions
 }
 
 // Pump allows to read mp3 data.
@@ -136,33 +132,6 @@ func (p *Pump) Pump(sourceID string, bufferSize int) (func() ([][]float64, error
 	}, sampleRate, numChannels, nil
 }
 
-// Quality determines encoding algorithm quality. It doesn't affect file size.
-// Use Q{0-9} constants for function calls. It is strictly optional.
-type Quality int
-
-const (
-	// Q0 sets maximum quality algorithm selection.
-	Q0 = Quality(iota)
-	// Q1 sets quality to 1.
-	Q1
-	// Q2 sets quality to 2.
-	Q2
-	// Q3 sets quality to 3. This is the value used by default.
-	Q3
-	// Q4 sets quality to 4.
-	Q4
-	// Q5 sets quality to 5.
-	Q5
-	// Q6 sets quality to 6.
-	Q6
-	// Q7 sets quality to 7.
-	Q7
-	// Q8 sets quality to 8.
-	Q8
-	// Q9 sets minimum quality algorithm selection.
-	Q9
-)
-
 // Sink is a generic mp3 sink interface. It is implemented by:
 //
 //		VBRSink: encodes with variable bit rate
@@ -170,15 +139,18 @@ const (
 //		ABRSink: encodes with average bit rate
 //
 // They also have different encoding parameters.
+// Quality determines encoding algorithm quality. It doesn't affect file size.
+// Use [0-9] values. It is strictly optional.
+// type Quality int
 type Sink interface {
 	pipe.Sink
 	pipe.Flusher
-	SetQuality(Quality)
+	SetQuality(int)
 }
 
 // sink wraps LameWriter and contains generic logic.
 type sink struct {
-	quality *Quality
+	quality *int
 	w       *lame.LameWriter
 }
 
@@ -189,7 +161,7 @@ func (s *sink) Flush(string) error {
 
 // SetQuality sets the quality to the lame encoder.
 // Q3 is used if you don't call this method.
-func (s *sink) SetQuality(q Quality) {
+func (s *sink) SetQuality(q int) {
 	s.quality = &q
 }
 
@@ -229,10 +201,11 @@ func (s *ABRSink) Sink(sourceID string, sampleRate, numChannels, bufferSize int)
 
 // VBRSink allows to send data to mp3 destinations with varied bit rate.
 // Bit rate varies in order to maintain constant audio quality.
+// VBRQuality determines VBR quality level. Use [0-9] values.
 type VBRSink struct {
 	io.Writer
 	ChannelMode
-	VBRQuality
+	VBRQuality int
 	sink
 }
 
@@ -291,4 +264,73 @@ func setChannelMode(e *lame.LameWriter, cm ChannelMode) {
 	case Mono:
 		e.Encoder.SetMode(lame.MONO)
 	}
+}
+
+// SinkBuilder creates Sink with provided parameters.
+type SinkBuilder struct {
+	io.Writer
+	BitRateMode
+	ChannelMode
+	BitRate    int
+	VBRQuality int
+	UseQuality bool
+	Quality    int
+}
+
+// Build creates sink if provided configuration is valid, otherwise error is returned.
+func (sb *SinkBuilder) Build() (pipe.Sink, error) {
+	// check if bit rate mode is supported
+	if _, ok := Supported.BitRateModes[sb.BitRateMode]; !ok {
+		return nil, fmt.Errorf("Bit rate mode %v is not supported", sb.BitRateMode)
+	}
+
+	// check if channel mode is supported
+	if _, ok := Supported.ChannelModes[sb.ChannelMode]; !ok {
+		return nil, fmt.Errorf("Channel mode %v is not supported", sb.ChannelMode)
+	}
+
+	// check if quality is supported
+	if sb.UseQuality {
+		if sb.Quality < 0 || sb.Quality > 9 {
+			return nil, fmt.Errorf("Quality %v is not supported", sb.Quality)
+		}
+	}
+
+	if sb.BitRateMode == VBR {
+		// validate VBR quality
+		if sb.VBRQuality < 0 || sb.VBRQuality > 9 {
+			return nil, fmt.Errorf("VBR quality %v is not supported", sb.VBRQuality)
+		}
+	} else {
+		// validate bit rate for ABR and CBR
+		if sb.BitRate > MaxBitRate || sb.BitRate < MinBitRate {
+			return nil, fmt.Errorf("Bit rate %v is not supported. Provide value between %d and %d", sb.BitRate, MinBitRate, MaxBitRate)
+		}
+	}
+
+	var s Sink
+	switch sb.BitRateMode {
+	case CBR:
+		s = &CBRSink{
+			Writer:      sb.Writer,
+			ChannelMode: sb.ChannelMode,
+			BitRate:     sb.BitRate,
+		}
+	case ABR:
+		s = &ABRSink{
+			Writer:      sb.Writer,
+			ChannelMode: sb.ChannelMode,
+			BitRate:     sb.BitRate,
+		}
+	case VBR:
+		s = &VBRSink{
+			Writer:      sb.Writer,
+			ChannelMode: sb.ChannelMode,
+			VBRQuality:  sb.VBRQuality,
+		}
+	}
+	if sb.UseQuality {
+		s.SetQuality(sb.Quality)
+	}
+	return s, nil
 }
