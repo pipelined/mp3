@@ -16,15 +16,14 @@ const (
 )
 
 func TestMp3(t *testing.T) {
-
 	tests := []struct {
 		inFile      string
 		vbr         mp3.BitRateMode
 		channelMode mp3.ChannelMode
 		bitRate     int
-		vbrQuality  mp3.VBRQuality
+		vbrQuality  int
 		useQuality  bool
-		quality     mp3.Quality
+		quality     int
 	}{
 		{
 			inFile:      sample,
@@ -54,25 +53,25 @@ func TestMp3(t *testing.T) {
 			inFile:      sample,
 			channelMode: mp3.JointStereo,
 			vbr:         mp3.VBR,
-			vbrQuality:  mp3.VBR0,
+			vbrQuality:  0,
 		},
 		{
 			inFile:      sample,
 			channelMode: mp3.JointStereo,
 			vbr:         mp3.VBR,
-			vbrQuality:  mp3.VBR9,
+			vbrQuality:  9,
 		},
 		{
 			inFile:      sample,
 			channelMode: mp3.Mono,
 			vbr:         mp3.VBR,
-			vbrQuality:  mp3.VBR9,
+			vbrQuality:  9,
 		},
 		{
 			inFile:      sample,
 			channelMode: mp3.Mono,
 			vbr:         mp3.VBR,
-			vbrQuality:  mp3.VBR9,
+			vbrQuality:  9,
 			useQuality:  true,
 			quality:     9,
 		},
@@ -80,25 +79,25 @@ func TestMp3(t *testing.T) {
 			inFile:      sample,
 			channelMode: mp3.JointStereo,
 			vbr:         mp3.VBR,
-			vbrQuality:  mp3.VBR0,
+			vbrQuality:  0,
 			useQuality:  true,
-			quality:     mp3.Q0,
+			quality:     0,
 		},
 		{
 			inFile:      sample,
 			channelMode: mp3.JointStereo,
 			vbr:         mp3.VBR,
-			vbrQuality:  mp3.VBR0,
+			vbrQuality:  0,
 			useQuality:  true,
-			quality:     mp3.Q9,
+			quality:     9,
 		},
 		{
 			inFile:      sample,
 			channelMode: mp3.Stereo,
 			vbr:         mp3.VBR,
-			vbrQuality:  mp3.VBR0,
+			vbrQuality:  0,
 			useQuality:  true,
-			quality:     mp3.Q3,
+			quality:     3,
 		},
 	}
 
@@ -160,5 +159,86 @@ func TestMp3(t *testing.T) {
 		assert.Nil(t, err)
 		err = outFile.Close()
 		assert.Nil(t, err)
+	}
+}
+
+func TestSinkBuilder(t *testing.T) {
+	tests := []struct {
+		mp3.ChannelMode
+		mp3.BitRateMode
+		BitRate    int
+		VBRQuality int
+		UseQuality bool
+		Quality    int
+		Error      bool
+	}{
+		{
+			ChannelMode: mp3.Stereo,
+			BitRateMode: mp3.VBR,
+			VBRQuality:  2,
+		},
+		{
+			ChannelMode: mp3.Stereo,
+			BitRateMode: mp3.CBR,
+			BitRate:     300,
+			UseQuality:  true,
+			Quality:     1,
+		},
+		{
+			ChannelMode: mp3.Stereo,
+			BitRateMode: mp3.ABR,
+			BitRate:     300,
+		},
+		{
+			ChannelMode: mp3.Stereo,
+			BitRateMode: mp3.ABR,
+			BitRate:     400,
+			Error:       true,
+		},
+		{
+			ChannelMode: mp3.Stereo,
+			BitRateMode: mp3.VBR,
+			VBRQuality:  10,
+			Error:       true,
+		},
+		{
+			ChannelMode: mp3.Stereo,
+			BitRateMode: mp3.CBR,
+			BitRate:     300,
+			UseQuality:  true,
+			Quality:     11,
+			Error:       true,
+		},
+		{
+			ChannelMode: mp3.ChannelMode(500),
+			BitRateMode: mp3.CBR,
+			BitRate:     300,
+			Error:       true,
+		},
+		{
+			ChannelMode: mp3.JointStereo,
+			BitRateMode: mp3.BitRateMode(100),
+			BitRate:     300,
+			Error:       true,
+		},
+	}
+
+	for _, test := range tests {
+		sb := mp3.SinkBuilder{
+			ChannelMode: test.ChannelMode,
+			BitRateMode: test.BitRateMode,
+			BitRate:     test.BitRate,
+			VBRQuality:  test.VBRQuality,
+			UseQuality:  test.UseQuality,
+			Quality:     test.Quality,
+		}
+		s, err := sb.Build()
+		if test.Error {
+			assert.NotNil(t, err)
+			assert.Nil(t, s)
+		} else {
+			assert.NotNil(t, s)
+			assert.Nil(t, err)
+		}
 	}
 }
