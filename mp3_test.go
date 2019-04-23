@@ -146,17 +146,21 @@ func TestSinkBuilder(t *testing.T) {
 			Error:  true,
 		},
 		{
-			Result: mp3.Supported.VBRQuality(0),
+			Result: mp3.Supported.BitRateMode(mp3.VBR{Quality: 0}),
 		},
 		{
-			Result: mp3.Supported.VBRQuality(1000),
+			Result: mp3.Supported.BitRateMode(mp3.VBR{Quality: 1000}),
 			Error:  true,
 		},
 		{
-			Result: mp3.Supported.BitRate(320),
+			Result: mp3.Supported.BitRateMode(mp3.ABR{BitRate: 320}),
 		},
 		{
-			Result: mp3.Supported.BitRate(0),
+			Result: mp3.Supported.BitRateMode(mp3.CBR{BitRate: 0}),
+			Error:  true,
+		},
+		{
+			Result: mp3.Supported.BitRateMode(nil),
 			Error:  true,
 		},
 		{

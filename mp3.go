@@ -240,8 +240,33 @@ func (s supported) ChannelMode(v ChannelMode) error {
 	return nil
 }
 
+// Quality checks if provided quality is supported.
+func (s supported) Quality(v int) error {
+	if v < 0 || v > 9 {
+		return fmt.Errorf("Quality %v is not supported. Provide value between 0 and 9", v)
+	}
+	return nil
+}
+
+// BitRateMode checks if provided bit rate mode is supported.
+// It also validates if provided mode has valid settings:
+// 	* VBR quality for VBR;
+//	* Bit rate for ABR and CBR.
+func (s supported) BitRateMode(v BitRateMode) error {
+	switch t := v.(type) {
+	case VBR:
+		return Supported.vbrQuality(t.Quality)
+	case CBR:
+		return Supported.bitRate(t.BitRate)
+	case ABR:
+		return Supported.bitRate(t.BitRate)
+	default:
+		return fmt.Errorf("Bit rate mode %T is not supported", t)
+	}
+}
+
 // VBRQuality checks if provided VBR quality is supported.
-func (s supported) VBRQuality(v int) error {
+func (s supported) vbrQuality(v int) error {
 	if v < 0 || v > 9 {
 		return fmt.Errorf("VBR quality %v is not supported. Provide value between 0 and 9", v)
 	}
@@ -249,17 +274,9 @@ func (s supported) VBRQuality(v int) error {
 }
 
 // BitRate checks if provided bit rate is supported.
-func (s supported) BitRate(v int) error {
+func (s supported) bitRate(v int) error {
 	if v > MaxBitRate || v < MinBitRate {
 		return fmt.Errorf("Bit rate %v is not supported. Provide value between %d and %d", v, MinBitRate, MaxBitRate)
-	}
-	return nil
-}
-
-// Quality checks if provided quality is supported.
-func (s supported) Quality(v int) error {
-	if v < 0 || v > 9 {
-		return fmt.Errorf("Quality %v is not supported. Provide value between 0 and 9", v)
 	}
 	return nil
 }
