@@ -1,6 +1,6 @@
 package mp3
 
-//go:generate stringer -type=ChannelMode,BitRateMode -output=stringers.go
+//go:generate stringer -type=ChannelMode -output=stringers.go
 
 import (
 	"bytes"
@@ -10,7 +10,6 @@ import (
 
 	"github.com/viert/lame"
 
-	"github.com/pipelined/pipe"
 	"github.com/pipelined/signal"
 
 	mp3 "github.com/hajimehoshi/go-mp3"
@@ -34,16 +33,26 @@ const (
 	JointStereo
 )
 
-// BitRateMode determines which VBR setting is going to be used.
-type BitRateMode int
+type (
+	// BitRateMode determines which VBR setting is going to be used.
+	BitRateMode interface {
+		apply(*lame.LameWriter)
+	}
 
-const (
-	// CBR uses constant bit rate.
-	CBR BitRateMode = iota
-	// ABR uses average bit rate.
-	ABR
 	// VBR uses variable bit rate.
-	VBR
+	VBR struct {
+		Quality int
+	}
+
+	// ABR uses average bit rate.
+	ABR struct {
+		BitRate int
+	}
+
+	// CBR uses constant bit rate.
+	CBR struct {
+		BitRate int
+	}
 )
 
 const (
@@ -58,11 +67,6 @@ const (
 var (
 	// Supported values for convert configuration.
 	Supported = supported{
-		bitRateModes: map[BitRateMode]struct{}{
-			CBR: {},
-			VBR: {},
-			ABR: {},
-		},
 		channelModes: map[ChannelMode]struct{}{
 			JointStereo: {},
 			Stereo:      {},
@@ -144,10 +148,11 @@ func (p *Pump) Pump(sourceID string, bufferSize int) (func() ([][]float64, error
 // Quality determines encoding algorithm quality. It doesn't affect file size.
 // Use [0-9] values. It is strictly optional.
 // type Quality int
-type Sink interface {
-	pipe.Sink
-	pipe.Flusher
-	SetQuality(int)
+type Sink struct {
+	io.Writer
+	BitRateMode
+	ChannelMode
+	sink
 }
 
 // sink wraps LameWriter and contains generic logic.
@@ -167,64 +172,35 @@ func (s *sink) SetQuality(q int) {
 	s.quality = &q
 }
 
-// CBRSink allows to send data to mp3 destinations with constant bit rate.
-// Audio quality varies in order to maintain constant bit rate.
-type CBRSink struct {
-	io.Writer
-	ChannelMode
-	BitRate int
-	sink
-}
-
 // Sink writes buffer into destination.
-func (s *CBRSink) Sink(sourceID string, sampleRate, numChannels, bufferSize int) (func([][]float64) error, error) {
+func (s *Sink) Sink(sourceID string, sampleRate, numChannels, bufferSize int) (func([][]float64) error, error) {
 	s.w = lame.NewWriter(s)
-	s.w.Encoder.SetBitrate(s.BitRate)
+	s.BitRateMode.apply(s.w)
 
-	return sinkFn(s.sink, CBR, s.ChannelMode, sampleRate, numChannels), nil
+	return sinkFn(s.sink, s.ChannelMode, sampleRate, numChannels), nil
 }
 
-// ABRSink allows to send data to mp3 destinations with averaged bit rate.
-// Audio quality and bit rate both vary. A cross between VBR and CBR.
-type ABRSink struct {
-	io.Writer
-	ChannelMode
-	BitRate int
-	sink
+func (vbr VBR) apply(w *lame.LameWriter) {
+	w.Encoder.SetVBR(lame.VBR_MTRH)
+	w.Encoder.SetVBRQuality(vbr.Quality)
 }
 
-// Sink writes buffer into destination.
-func (s *ABRSink) Sink(sourceID string, sampleRate, numChannels, bufferSize int) (func([][]float64) error, error) {
-	s.w = lame.NewWriter(s)
-	s.w.Encoder.SetVBRAverageBitRate(s.BitRate)
-
-	return sinkFn(s.sink, ABR, s.ChannelMode, sampleRate, numChannels), nil
+func (abr ABR) apply(w *lame.LameWriter) {
+	w.Encoder.SetVBR(lame.VBR_ABR)
+	w.Encoder.SetVBRAverageBitRate(abr.BitRate)
 }
 
-// VBRSink allows to send data to mp3 destinations with varied bit rate.
-// Bit rate varies in order to maintain constant audio quality.
-// VBRQuality determines VBR quality level. Use [0-9] values.
-type VBRSink struct {
-	io.Writer
-	ChannelMode
-	VBRQuality int
-	sink
-}
-
-// Sink writes buffer into destination.
-func (s *VBRSink) Sink(sourceID string, sampleRate, numChannels, bufferSize int) (func([][]float64) error, error) {
-	s.w = lame.NewWriter(s)
-	s.w.Encoder.SetVBRQuality(int(s.VBRQuality))
-	return sinkFn(s.sink, VBR, s.ChannelMode, sampleRate, numChannels), nil
+func (cbr CBR) apply(w *lame.LameWriter) {
+	w.Encoder.SetVBR(lame.VBR_OFF)
+	w.Encoder.SetBitrate(cbr.BitRate)
 }
 
 // sinkFn is a generic sink closure for lame writer.
-func sinkFn(s sink, bitRateMode BitRateMode, channelMode ChannelMode, sampleRate, numChannels int) func([][]float64) error {
+func sinkFn(s sink, channelMode ChannelMode, sampleRate, numChannels int) func([][]float64) error {
 	if s.quality != nil {
 		q := *s.quality
 		s.w.Encoder.SetQuality(int(q))
 	}
-	setBitRateMode(s.w, bitRateMode)
 	setChannelMode(s.w, channelMode)
 	s.w.Encoder.SetInSamplerate(sampleRate)
 	s.w.Encoder.SetNumChannels(numChannels)
@@ -245,18 +221,6 @@ func sinkFn(s sink, bitRateMode BitRateMode, channelMode ChannelMode, sampleRate
 }
 
 // setMode assigns mode to the sink.
-func setBitRateMode(e *lame.LameWriter, br BitRateMode) {
-	switch br {
-	case CBR:
-		e.Encoder.SetVBR(lame.VBR_OFF)
-	case VBR:
-		e.Encoder.SetVBR(lame.VBR_MTRH)
-	case ABR:
-		e.Encoder.SetVBR(lame.VBR_ABR)
-	}
-}
-
-// setMode assigns mode to the sink.
 func setChannelMode(e *lame.LameWriter, cm ChannelMode) {
 	switch cm {
 	case JointStereo:
@@ -266,14 +230,6 @@ func setChannelMode(e *lame.LameWriter, cm ChannelMode) {
 	case Mono:
 		e.Encoder.SetMode(lame.MONO)
 	}
-}
-
-// BitRateMode checks if provided bit rate mode is supported.
-func (s supported) BitRateMode(v BitRateMode) error {
-	if _, ok := s.bitRateModes[v]; !ok {
-		return fmt.Errorf("Bit rate mode %v is not supported", v)
-	}
-	return nil
 }
 
 // ChannelMode checks if provided channel mode is supported.
