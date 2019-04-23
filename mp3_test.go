@@ -164,81 +164,52 @@ func TestMp3(t *testing.T) {
 
 func TestSinkBuilder(t *testing.T) {
 	tests := []struct {
-		mp3.ChannelMode
-		mp3.BitRateMode
-		BitRate    int
-		VBRQuality int
-		UseQuality bool
-		Quality    int
-		Error      bool
+		Result error
+		Error  bool
 	}{
 		{
-			ChannelMode: mp3.Stereo,
-			BitRateMode: mp3.VBR,
-			VBRQuality:  2,
+			Result: mp3.Supported.BitRateMode(mp3.VBR),
 		},
 		{
-			ChannelMode: mp3.Stereo,
-			BitRateMode: mp3.CBR,
-			BitRate:     300,
-			UseQuality:  true,
-			Quality:     1,
+			Result: mp3.Supported.BitRateMode(1000),
+			Error:  true,
 		},
 		{
-			ChannelMode: mp3.Stereo,
-			BitRateMode: mp3.ABR,
-			BitRate:     300,
+			Result: mp3.Supported.ChannelMode(mp3.JointStereo),
 		},
 		{
-			ChannelMode: mp3.Stereo,
-			BitRateMode: mp3.ABR,
-			BitRate:     400,
-			Error:       true,
+			Result: mp3.Supported.ChannelMode(1000),
+			Error:  true,
 		},
 		{
-			ChannelMode: mp3.Stereo,
-			BitRateMode: mp3.VBR,
-			VBRQuality:  10,
-			Error:       true,
+			Result: mp3.Supported.VBRQuality(0),
 		},
 		{
-			ChannelMode: mp3.Stereo,
-			BitRateMode: mp3.CBR,
-			BitRate:     300,
-			UseQuality:  true,
-			Quality:     11,
-			Error:       true,
+			Result: mp3.Supported.VBRQuality(1000),
+			Error:  true,
 		},
 		{
-			ChannelMode: mp3.ChannelMode(500),
-			BitRateMode: mp3.CBR,
-			BitRate:     300,
-			Error:       true,
+			Result: mp3.Supported.BitRate(320),
 		},
 		{
-			ChannelMode: mp3.JointStereo,
-			BitRateMode: mp3.BitRateMode(100),
-			BitRate:     300,
-			Error:       true,
+			Result: mp3.Supported.BitRate(0),
+			Error:  true,
+		},
+		{
+			Result: mp3.Supported.Quality(0),
+		},
+		{
+			Result: mp3.Supported.Quality(1000),
+			Error:  true,
 		},
 	}
 
 	for _, test := range tests {
-		sb := mp3.SinkBuilder{
-			ChannelMode: test.ChannelMode,
-			BitRateMode: test.BitRateMode,
-			BitRate:     test.BitRate,
-			VBRQuality:  test.VBRQuality,
-			UseQuality:  test.UseQuality,
-			Quality:     test.Quality,
-		}
-		s, err := sb.Build()
+
 		if test.Error {
-			assert.NotNil(t, err)
-			assert.Nil(t, s)
+			assert.NotNil(t, test.Result)
 		} else {
-			assert.NotNil(t, s)
-			assert.Nil(t, err)
+			assert.Nil(t, test.Result)
 		}
 	}
 }

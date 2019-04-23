@@ -57,16 +57,13 @@ const (
 
 var (
 	// Supported values for convert configuration.
-	Supported = struct {
-		BitRateModes map[BitRateMode]struct{}
-		ChannelModes map[ChannelMode]struct{}
-	}{
-		BitRateModes: map[BitRateMode]struct{}{
+	Supported = supported{
+		bitRateModes: map[BitRateMode]struct{}{
 			CBR: {},
 			VBR: {},
 			ABR: {},
 		},
-		ChannelModes: map[ChannelMode]struct{}{
+		channelModes: map[ChannelMode]struct{}{
 			JointStereo: {},
 			Stereo:      {},
 			Mono:        {},
@@ -77,6 +74,11 @@ var (
 		DefaultExtension,
 	}
 )
+
+type supported struct {
+	bitRateModes map[BitRateMode]struct{}
+	channelModes map[ChannelMode]struct{}
+}
 
 // Extensions of mp3 files.
 func Extensions() []string {
@@ -266,71 +268,42 @@ func setChannelMode(e *lame.LameWriter, cm ChannelMode) {
 	}
 }
 
-// SinkBuilder creates Sink with provided parameters.
-type SinkBuilder struct {
-	io.Writer
-	BitRateMode
-	ChannelMode
-	BitRate    int
-	VBRQuality int
-	UseQuality bool
-	Quality    int
+// BitRateMode checks if provided bit rate mode is supported.
+func (s supported) BitRateMode(v BitRateMode) error {
+	if _, ok := s.bitRateModes[v]; !ok {
+		return fmt.Errorf("Bit rate mode %v is not supported", v)
+	}
+	return nil
 }
 
-// Build creates sink if provided configuration is valid, otherwise error is returned.
-func (sb *SinkBuilder) Build() (pipe.Sink, error) {
-	// check if bit rate mode is supported
-	if _, ok := Supported.BitRateModes[sb.BitRateMode]; !ok {
-		return nil, fmt.Errorf("Bit rate mode %v is not supported", sb.BitRateMode)
+// ChannelMode checks if provided channel mode is supported.
+func (s supported) ChannelMode(v ChannelMode) error {
+	if _, ok := s.channelModes[v]; !ok {
+		return fmt.Errorf("Channel mode %v is not supported", v)
 	}
+	return nil
+}
 
-	// check if channel mode is supported
-	if _, ok := Supported.ChannelModes[sb.ChannelMode]; !ok {
-		return nil, fmt.Errorf("Channel mode %v is not supported", sb.ChannelMode)
+// VBRQuality checks if provided VBR quality is supported.
+func (s supported) VBRQuality(v int) error {
+	if v < 0 || v > 9 {
+		return fmt.Errorf("VBR quality %v is not supported. Provide value between 0 and 9", v)
 	}
+	return nil
+}
 
-	// check if quality is supported
-	if sb.UseQuality {
-		if sb.Quality < 0 || sb.Quality > 9 {
-			return nil, fmt.Errorf("Quality %v is not supported", sb.Quality)
-		}
+// BitRate checks if provided bit rate is supported.
+func (s supported) BitRate(v int) error {
+	if v > MaxBitRate || v < MinBitRate {
+		return fmt.Errorf("Bit rate %v is not supported. Provide value between %d and %d", v, MinBitRate, MaxBitRate)
 	}
+	return nil
+}
 
-	if sb.BitRateMode == VBR {
-		// validate VBR quality
-		if sb.VBRQuality < 0 || sb.VBRQuality > 9 {
-			return nil, fmt.Errorf("VBR quality %v is not supported", sb.VBRQuality)
-		}
-	} else {
-		// validate bit rate for ABR and CBR
-		if sb.BitRate > MaxBitRate || sb.BitRate < MinBitRate {
-			return nil, fmt.Errorf("Bit rate %v is not supported. Provide value between %d and %d", sb.BitRate, MinBitRate, MaxBitRate)
-		}
+// Quality checks if provided quality is supported.
+func (s supported) Quality(v int) error {
+	if v < 0 || v > 9 {
+		return fmt.Errorf("Quality %v is not supported. Provide value between 0 and 9", v)
 	}
-
-	var s Sink
-	switch sb.BitRateMode {
-	case CBR:
-		s = &CBRSink{
-			Writer:      sb.Writer,
-			ChannelMode: sb.ChannelMode,
-			BitRate:     sb.BitRate,
-		}
-	case ABR:
-		s = &ABRSink{
-			Writer:      sb.Writer,
-			ChannelMode: sb.ChannelMode,
-			BitRate:     sb.BitRate,
-		}
-	case VBR:
-		s = &VBRSink{
-			Writer:      sb.Writer,
-			ChannelMode: sb.ChannelMode,
-			VBRQuality:  sb.VBRQuality,
-		}
-	}
-	if sb.UseQuality {
-		s.SetQuality(sb.Quality)
-	}
-	return s, nil
+	return nil
 }
