@@ -152,23 +152,18 @@ type Sink struct {
 	io.Writer
 	BitRateMode
 	ChannelMode
-	sink
-}
-
-// sink wraps LameWriter and contains generic logic.
-type sink struct {
 	quality *int
 	w       *lame.LameWriter
 }
 
 // Flush cleans up buffers.
-func (s *sink) Flush(string) error {
+func (s *Sink) Flush(string) error {
 	return s.w.Close()
 }
 
 // SetQuality sets the quality to the lame encoder.
 // Q3 is used if you don't call this method.
-func (s *sink) SetQuality(q int) {
+func (s *Sink) SetQuality(q int) {
 	s.quality = &q
 }
 
@@ -177,31 +172,11 @@ func (s *Sink) Sink(sourceID string, sampleRate, numChannels, bufferSize int) (f
 	s.w = lame.NewWriter(s)
 	s.BitRateMode.apply(s.w)
 
-	return sinkFn(s.sink, s.ChannelMode, sampleRate, numChannels), nil
-}
-
-func (vbr VBR) apply(w *lame.LameWriter) {
-	w.Encoder.SetVBR(lame.VBR_MTRH)
-	w.Encoder.SetVBRQuality(vbr.Quality)
-}
-
-func (abr ABR) apply(w *lame.LameWriter) {
-	w.Encoder.SetVBR(lame.VBR_ABR)
-	w.Encoder.SetVBRAverageBitRate(abr.BitRate)
-}
-
-func (cbr CBR) apply(w *lame.LameWriter) {
-	w.Encoder.SetVBR(lame.VBR_OFF)
-	w.Encoder.SetBitrate(cbr.BitRate)
-}
-
-// sinkFn is a generic sink closure for lame writer.
-func sinkFn(s sink, channelMode ChannelMode, sampleRate, numChannels int) func([][]float64) error {
 	if s.quality != nil {
 		q := *s.quality
 		s.w.Encoder.SetQuality(int(q))
 	}
-	setChannelMode(s.w, channelMode)
+	setChannelMode(s.w, s.ChannelMode)
 	s.w.Encoder.SetInSamplerate(sampleRate)
 	s.w.Encoder.SetNumChannels(numChannels)
 	s.w.Encoder.InitParams()
@@ -217,7 +192,22 @@ func sinkFn(s sink, channelMode ChannelMode, sampleRate, numChannels int) func([
 			return err
 		}
 		return nil
-	}
+	}, nil
+}
+
+func (vbr VBR) apply(w *lame.LameWriter) {
+	w.Encoder.SetVBR(lame.VBR_MTRH)
+	w.Encoder.SetVBRQuality(vbr.Quality)
+}
+
+func (abr ABR) apply(w *lame.LameWriter) {
+	w.Encoder.SetVBR(lame.VBR_ABR)
+	w.Encoder.SetVBRAverageBitRate(abr.BitRate)
+}
+
+func (cbr CBR) apply(w *lame.LameWriter) {
+	w.Encoder.SetVBR(lame.VBR_OFF)
+	w.Encoder.SetBitrate(cbr.BitRate)
 }
 
 // setMode assigns mode to the sink.
