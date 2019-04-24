@@ -37,6 +37,7 @@ type (
 	// BitRateMode determines which VBR setting is going to be used.
 	BitRateMode interface {
 		apply(*lame.LameWriter)
+		fmt.Stringer
 	}
 
 	// VBR uses variable bit rate.
@@ -62,6 +63,10 @@ const (
 	MaxBitRate = 320
 	// DefaultExtension of mp3 files.
 	DefaultExtension = ".mp3"
+
+	vbr = "VBR"
+	abr = "ABR"
+	cbr = "CBR"
 )
 
 var (
@@ -80,7 +85,6 @@ var (
 )
 
 type supported struct {
-	bitRateModes map[BitRateMode]struct{}
 	channelModes map[ChannelMode]struct{}
 }
 
@@ -200,14 +204,26 @@ func (vbr VBR) apply(w *lame.LameWriter) {
 	w.Encoder.SetVBRQuality(vbr.Quality)
 }
 
+func (VBR) String() string {
+	return vbr
+}
+
 func (abr ABR) apply(w *lame.LameWriter) {
 	w.Encoder.SetVBR(lame.VBR_ABR)
 	w.Encoder.SetVBRAverageBitRate(abr.BitRate)
 }
 
+func (ABR) String() string {
+	return abr
+}
+
 func (cbr CBR) apply(w *lame.LameWriter) {
 	w.Encoder.SetVBR(lame.VBR_OFF)
 	w.Encoder.SetBitrate(cbr.BitRate)
+}
+
+func (CBR) String() string {
+	return cbr
 }
 
 // setMode assigns mode to the sink.
@@ -271,6 +287,7 @@ func (s supported) bitRate(v int) error {
 	return nil
 }
 
+// ChannelModes return supported mp3 channel modes.
 func (s supported) ChannelModes() map[ChannelMode]struct{} {
 	result := make(map[ChannelMode]struct{})
 	for k, v := range s.channelModes {
