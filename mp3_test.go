@@ -133,7 +133,7 @@ func TestMp3(t *testing.T) {
 	}
 }
 
-func TestSinkBuilder(t *testing.T) {
+func TestSupported(t *testing.T) {
 	tests := []struct {
 		Result error
 		Error  bool
@@ -180,4 +180,10 @@ func TestSinkBuilder(t *testing.T) {
 			assert.Nil(t, test.Result)
 		}
 	}
+
+	extensions := mp3.Extensions()
+	assert.NotNil(t, extensions)
+
+	bitRateModes := mp3.Supported.ChannelModes()
+	assert.NotNil(t, bitRateModes)
 }

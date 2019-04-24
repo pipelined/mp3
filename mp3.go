@@ -270,3 +270,11 @@ func (s supported) bitRate(v int) error {
 	}
 	return nil
 }
+
+func (s supported) ChannelModes() map[ChannelMode]struct{} {
+	result := make(map[ChannelMode]struct{})
+	for k, v := range s.channelModes {
+		result[k] = v
+	}
+	return result
+}
