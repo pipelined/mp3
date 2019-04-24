@@ -20,82 +20,69 @@ func TestMp3(t *testing.T) {
 		inFile      string
 		vbr         mp3.BitRateMode
 		channelMode mp3.ChannelMode
-		bitRate     int
-		vbrQuality  int
 		useQuality  bool
 		quality     int
 	}{
 		{
 			inFile:      sample,
 			channelMode: mp3.JointStereo,
-			vbr:         mp3.CBR,
-			bitRate:     320,
+			vbr:         mp3.CBR{BitRate: 320},
 		},
 		{
 			inFile:      sample,
 			channelMode: mp3.JointStereo,
-			vbr:         mp3.CBR,
-			bitRate:     192,
+			vbr:         mp3.CBR{BitRate: 192},
 		},
 		{
 			inFile:      sample,
 			channelMode: mp3.JointStereo,
-			vbr:         mp3.ABR,
-			bitRate:     220,
+			vbr:         mp3.ABR{BitRate: 220},
 		},
 		{
 			inFile:      sample,
 			channelMode: mp3.JointStereo,
-			vbr:         mp3.ABR,
-			bitRate:     128,
+			vbr:         mp3.ABR{BitRate: 128},
 		},
 		{
 			inFile:      sample,
 			channelMode: mp3.JointStereo,
-			vbr:         mp3.VBR,
-			vbrQuality:  0,
+			vbr:         mp3.VBR{Quality: 0},
 		},
 		{
 			inFile:      sample,
 			channelMode: mp3.JointStereo,
-			vbr:         mp3.VBR,
-			vbrQuality:  9,
+			vbr:         mp3.VBR{Quality: 9},
 		},
 		{
 			inFile:      sample,
 			channelMode: mp3.Mono,
-			vbr:         mp3.VBR,
-			vbrQuality:  9,
+			vbr:         mp3.VBR{Quality: 9},
 		},
 		{
 			inFile:      sample,
 			channelMode: mp3.Mono,
-			vbr:         mp3.VBR,
-			vbrQuality:  9,
+			vbr:         mp3.VBR{Quality: 9},
 			useQuality:  true,
 			quality:     9,
 		},
 		{
 			inFile:      sample,
 			channelMode: mp3.JointStereo,
-			vbr:         mp3.VBR,
-			vbrQuality:  0,
+			vbr:         mp3.VBR{Quality: 0},
 			useQuality:  true,
 			quality:     0,
 		},
 		{
 			inFile:      sample,
 			channelMode: mp3.JointStereo,
-			vbr:         mp3.VBR,
-			vbrQuality:  0,
+			vbr:         mp3.VBR{Quality: 0},
 			useQuality:  true,
 			quality:     9,
 		},
 		{
 			inFile:      sample,
 			channelMode: mp3.Stereo,
-			vbr:         mp3.VBR,
-			vbrQuality:  0,
+			vbr:         mp3.VBR{Quality: 0},
 			useQuality:  true,
 			quality:     3,
 		},
@@ -108,26 +95,10 @@ func TestMp3(t *testing.T) {
 
 		outFile, err := os.Create(fmt.Sprintf("%s_%d_%s.mp3", out, i, test.vbr))
 		assert.Nil(t, err)
-		var sink mp3.Sink
-		switch test.vbr {
-		case mp3.CBR:
-			sink = &mp3.CBRSink{
-				Writer:      outFile,
-				ChannelMode: test.channelMode,
-				BitRate:     test.bitRate,
-			}
-		case mp3.ABR:
-			sink = &mp3.ABRSink{
-				Writer:      outFile,
-				ChannelMode: test.channelMode,
-				BitRate:     test.bitRate,
-			}
-		case mp3.VBR:
-			sink = &mp3.VBRSink{
-				Writer:      outFile,
-				ChannelMode: test.channelMode,
-				VBRQuality:  test.vbrQuality,
-			}
+		sink := &mp3.Sink{
+			Writer:      outFile,
+			ChannelMode: test.channelMode,
+			BitRateMode: test.vbr,
 		}
 		if test.useQuality {
 			sink.SetQuality(test.quality)
@@ -162,18 +133,11 @@ func TestMp3(t *testing.T) {
 	}
 }
 
-func TestSinkBuilder(t *testing.T) {
+func TestSupported(t *testing.T) {
 	tests := []struct {
 		Result error
 		Error  bool
 	}{
-		{
-			Result: mp3.Supported.BitRateMode(mp3.VBR),
-		},
-		{
-			Result: mp3.Supported.BitRateMode(1000),
-			Error:  true,
-		},
 		{
 			Result: mp3.Supported.ChannelMode(mp3.JointStereo),
 		},
@@ -182,17 +146,21 @@ func TestSinkBuilder(t *testing.T) {
 			Error:  true,
 		},
 		{
-			Result: mp3.Supported.VBRQuality(0),
+			Result: mp3.Supported.BitRateMode(mp3.VBR{Quality: 0}),
 		},
 		{
-			Result: mp3.Supported.VBRQuality(1000),
+			Result: mp3.Supported.BitRateMode(mp3.VBR{Quality: 1000}),
 			Error:  true,
 		},
 		{
-			Result: mp3.Supported.BitRate(320),
+			Result: mp3.Supported.BitRateMode(mp3.ABR{BitRate: 320}),
 		},
 		{
-			Result: mp3.Supported.BitRate(0),
+			Result: mp3.Supported.BitRateMode(mp3.CBR{BitRate: 0}),
+			Error:  true,
+		},
+		{
+			Result: mp3.Supported.BitRateMode(nil),
 			Error:  true,
 		},
 		{
@@ -212,4 +180,10 @@ func TestSinkBuilder(t *testing.T) {
 			assert.Nil(t, test.Result)
 		}
 	}
+
+	extensions := mp3.Extensions()
+	assert.NotNil(t, extensions)
+
+	bitRateModes := mp3.Supported.ChannelModes()
+	assert.NotNil(t, bitRateModes)
 }
