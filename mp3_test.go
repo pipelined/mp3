@@ -26,63 +26,63 @@ func TestMp3(t *testing.T) {
 		{
 			inFile:      sample,
 			channelMode: mp3.JointStereo,
-			vbr:         mp3.CBR{BitRate: 320},
+			vbr:         mp3.CBR(320),
 		},
 		{
 			inFile:      sample,
 			channelMode: mp3.JointStereo,
-			vbr:         mp3.CBR{BitRate: 192},
+			vbr:         mp3.CBR(192),
 		},
 		{
 			inFile:      sample,
 			channelMode: mp3.JointStereo,
-			vbr:         mp3.ABR{BitRate: 220},
+			vbr:         mp3.ABR(220),
 		},
 		{
 			inFile:      sample,
 			channelMode: mp3.JointStereo,
-			vbr:         mp3.ABR{BitRate: 128},
+			vbr:         mp3.ABR(128),
 		},
 		{
 			inFile:      sample,
 			channelMode: mp3.JointStereo,
-			vbr:         mp3.VBR{Quality: 0},
+			vbr:         mp3.VBR(0),
 		},
 		{
 			inFile:      sample,
 			channelMode: mp3.JointStereo,
-			vbr:         mp3.VBR{Quality: 9},
+			vbr:         mp3.VBR(9),
 		},
 		{
 			inFile:      sample,
 			channelMode: mp3.Mono,
-			vbr:         mp3.VBR{Quality: 9},
+			vbr:         mp3.VBR(9),
 		},
 		{
 			inFile:      sample,
 			channelMode: mp3.Mono,
-			vbr:         mp3.VBR{Quality: 9},
+			vbr:         mp3.VBR(9),
 			useQuality:  true,
 			quality:     9,
 		},
 		{
 			inFile:      sample,
 			channelMode: mp3.JointStereo,
-			vbr:         mp3.VBR{Quality: 0},
+			vbr:         mp3.VBR(0),
 			useQuality:  true,
 			quality:     0,
 		},
 		{
 			inFile:      sample,
 			channelMode: mp3.JointStereo,
-			vbr:         mp3.VBR{Quality: 0},
+			vbr:         mp3.VBR(0),
 			useQuality:  true,
 			quality:     9,
 		},
 		{
 			inFile:      sample,
 			channelMode: mp3.Stereo,
-			vbr:         mp3.VBR{Quality: 0},
+			vbr:         mp3.VBR(0),
 			useQuality:  true,
 			quality:     3,
 		},
@@ -133,57 +133,3 @@ func TestMp3(t *testing.T) {
 	}
 }
 
-func TestSupported(t *testing.T) {
-	tests := []struct {
-		Result error
-		Error  bool
-	}{
-		{
-			Result: mp3.Supported.ChannelMode(mp3.JointStereo),
-		},
-		{
-			Result: mp3.Supported.ChannelMode(1000),
-			Error:  true,
-		},
-		{
-			Result: mp3.Supported.BitRateMode(mp3.VBR{Quality: 0}),
-		},
-		{
-			Result: mp3.Supported.BitRateMode(mp3.VBR{Quality: 1000}),
-			Error:  true,
-		},
-		{
-			Result: mp3.Supported.BitRateMode(mp3.ABR{BitRate: 320}),
-		},
-		{
-			Result: mp3.Supported.BitRateMode(mp3.CBR{BitRate: 0}),
-			Error:  true,
-		},
-		{
-			Result: mp3.Supported.BitRateMode(nil),
-			Error:  true,
-		},
-		{
-			Result: mp3.Supported.Quality(0),
-		},
-		{
-			Result: mp3.Supported.Quality(1000),
-			Error:  true,
-		},
-	}
-
-	for _, test := range tests {
-
-		if test.Error {
-			assert.NotNil(t, test.Result)
-		} else {
-			assert.Nil(t, test.Result)
-		}
-	}
-
-	extensions := mp3.Extensions()
-	assert.NotNil(t, extensions)
-
-	bitRateModes := mp3.Supported.ChannelModes()
-	assert.NotNil(t, bitRateModes)
-}

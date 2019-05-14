@@ -1,6 +1,5 @@
+// Package mp3 provides pipe components that allow to read/write signal encoded in mp3 format.
 package mp3
-
-//go:generate stringer -type=ChannelMode -output=stringers.go
 
 import (
 	"bytes"
@@ -40,58 +39,15 @@ type (
 		fmt.Stringer
 	}
 
-	// VBR uses variable bit rate.
-	VBR struct {
-		Quality int
-	}
+	// VBR uses variable bit rate. Values: [0..10]
+	VBR int
 
-	// ABR uses average bit rate.
-	ABR struct {
-		BitRate int
-	}
+	// ABR uses average bit rate. Values: [8..320]
+	ABR int
 
-	// CBR uses constant bit rate.
-	CBR struct {
-		BitRate int
-	}
+	// CBR uses constant bit rate. Values: [8..320]
+	CBR int
 )
-
-const (
-	// MinBitRate is the minimal bit rate value that could be used for CBR/ABR sinks.
-	MinBitRate = 8
-	// MaxBitRate is the maximal bit rate value that could be used for CBR/ABR sinks.
-	MaxBitRate = 320
-	// DefaultExtension of mp3 files.
-	DefaultExtension = ".mp3"
-
-	vbr = "VBR"
-	abr = "ABR"
-	cbr = "CBR"
-)
-
-var (
-	// Supported values for convert configuration.
-	Supported = supported{
-		channelModes: map[ChannelMode]struct{}{
-			JointStereo: {},
-			Stereo:      {},
-			Mono:        {},
-		},
-	}
-	// extensions of mp3 files.
-	extensions = []string{
-		DefaultExtension,
-	}
-)
-
-type supported struct {
-	channelModes map[ChannelMode]struct{}
-}
-
-// Extensions of mp3 files.
-func Extensions() []string {
-	return extensions
-}
 
 // Pump allows to read mp3 data.
 // This component cannot be reused for consequent runs.
@@ -201,29 +157,29 @@ func (s *Sink) Sink(sourceID string, sampleRate, numChannels, bufferSize int) (f
 
 func (vbr VBR) apply(w *lame.LameWriter) {
 	w.Encoder.SetVBR(lame.VBR_MTRH)
-	w.Encoder.SetVBRQuality(vbr.Quality)
+	w.Encoder.SetVBRQuality(int(vbr))
 }
 
-func (VBR) String() string {
-	return vbr
+func (vbr VBR) String() string {
+	return fmt.Sprintf("VBR(%d)", vbr)
 }
 
 func (abr ABR) apply(w *lame.LameWriter) {
 	w.Encoder.SetVBR(lame.VBR_ABR)
-	w.Encoder.SetVBRAverageBitRate(abr.BitRate)
+	w.Encoder.SetVBRAverageBitRate(int(abr))
 }
 
-func (ABR) String() string {
-	return abr
+func (abr ABR) String() string {
+	return fmt.Sprintf("ABR(%d)", abr)
 }
 
 func (cbr CBR) apply(w *lame.LameWriter) {
 	w.Encoder.SetVBR(lame.VBR_OFF)
-	w.Encoder.SetBitrate(cbr.BitRate)
+	w.Encoder.SetBitrate(int(cbr))
 }
 
-func (CBR) String() string {
-	return cbr
+func (cbr CBR) String() string {
+	return fmt.Sprintf("CBR(%d)", cbr)
 }
 
 // setMode assigns mode to the sink.
@@ -238,60 +194,14 @@ func setChannelMode(e *lame.LameWriter, cm ChannelMode) {
 	}
 }
 
-// ChannelMode checks if provided channel mode is supported.
-func (s supported) ChannelMode(v ChannelMode) error {
-	if _, ok := s.channelModes[v]; !ok {
-		return fmt.Errorf("Channel mode %v is not supported", v)
+func (cm ChannelMode) String() string {
+	switch cm {
+	case Mono:
+		return "Mono"
+	case Stereo:
+		return "Stereo"
+	case JointStereo:
+		return "Joint Stereo"
 	}
-	return nil
-}
-
-// Quality checks if provided quality is supported.
-func (s supported) Quality(v int) error {
-	if v < 0 || v > 9 {
-		return fmt.Errorf("Quality %v is not supported. Provide value between 0 and 9", v)
-	}
-	return nil
-}
-
-// BitRateMode checks if provided bit rate mode is supported.
-// It also validates if provided mode has valid settings:
-// 	* VBR quality for VBR;
-//	* Bit rate for ABR and CBR.
-func (s supported) BitRateMode(v BitRateMode) error {
-	switch t := v.(type) {
-	case VBR:
-		return Supported.vbrQuality(t.Quality)
-	case CBR:
-		return Supported.bitRate(t.BitRate)
-	case ABR:
-		return Supported.bitRate(t.BitRate)
-	default:
-		return fmt.Errorf("Bit rate mode %T is not supported", t)
-	}
-}
-
-// VBRQuality checks if provided VBR quality is supported.
-func (s supported) vbrQuality(v int) error {
-	if v < 0 || v > 9 {
-		return fmt.Errorf("VBR quality %v is not supported. Provide value between 0 and 9", v)
-	}
-	return nil
-}
-
-// BitRate checks if provided bit rate is supported.
-func (s supported) bitRate(v int) error {
-	if v > MaxBitRate || v < MinBitRate {
-		return fmt.Errorf("Bit rate %v is not supported. Provide value between %d and %d", v, MinBitRate, MaxBitRate)
-	}
-	return nil
-}
-
-// ChannelModes return supported mp3 channel modes.
-func (s supported) ChannelModes() map[ChannelMode]struct{} {
-	result := make(map[ChannelMode]struct{})
-	for k, v := range s.channelModes {
-		result[k] = v
-	}
-	return result
+	return "Unknown"
 }
