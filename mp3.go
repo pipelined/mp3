@@ -58,56 +58,57 @@ type Pump struct {
 
 // Pump reads buffer from mp3.
 func (p *Pump) Pump(sourceID string, bufferSize int) (func() ([][]float64, error), int, int, error) {
-	var err error
-
-	p.d, err = mp3.NewDecoder(p)
+	d, err := mp3.NewDecoder(p)
 	if err != nil {
 		return nil, 0, 0, err
 	}
+	p.d = d
 
 	// current decoder always provides stereo, so constant
 	numChannels := 2
 	sampleRate := p.d.SampleRate()
-
+	
+	size := bufferSize * numChannels
+	var val int16
 	return func() ([][]float64, error) {
-		capacity := bufferSize * numChannels
-		ints := make([]int, 0, capacity)
+		var err error
+		var read int
+		ints := make([]int, size)
 
-		var val int16
-		for len(ints) < capacity {
-			if err := binary.Read(p.d, binary.LittleEndian, &val); err != nil { // read next frame
-				if err == io.EOF { // no bytes available
-					if len(ints) == 0 {
-						return nil, io.EOF
-					}
-					break
-				} else { // error happened
+		for read < size {
+			err = binary.Read(p.d, binary.LittleEndian, &val) // read next frame
+			if err != nil {
+				if err == io.EOF { 
+					break // no more bytes available
+				} else { 
 					return nil, err
 				}
-			} else {
-				ints = append(ints, int(val)) // append data
 			}
+			ints[read] = int(val)
+			read++
 		}
 
-		b := signal.InterInt{Data: ints, NumChannels: numChannels, BitDepth: signal.BitDepth16}.AsFloat64()
+		// nothing was read
+		if read == 0 {
+			return nil, io.EOF
+		}
+
+		// trim and convert the buffer 
+		b := signal.InterInt{
+			Data:        ints[:read],
+			NumChannels: numChannels,
+			BitDepth:    signal.BitDepth16,
+		}.AsFloat64()
+
 		// read not enough samples
-		if b.Size() != bufferSize {
+		if read != bufferSize {
 			return b, io.ErrUnexpectedEOF
 		}
 		return b, nil
 	}, sampleRate, numChannels, nil
 }
 
-// Sink is a generic mp3 sink interface. It is implemented by:
-//
-//		VBRSink: encodes with variable bit rate
-//		CBRSink: encodes with constant bit rate
-//		ABRSink: encodes with average bit rate
-//
-// They also have different encoding parameters.
-// Quality determines encoding algorithm quality. It doesn't affect file size.
-// Use [0-9] values. It is strictly optional.
-// type Quality int
+// Sink allows to write mp3 files.
 type Sink struct {
 	io.Writer
 	BitRateMode
@@ -122,7 +123,8 @@ func (s *Sink) Flush(string) error {
 }
 
 // SetQuality sets the quality to the lame encoder.
-// Q3 is used if you don't call this method.
+// Quality determines encoding algorithm quality. It doesn't affect file size.
+// Use [0-9] values. It is strictly optional. Default 5 is used if no value provided.
 func (s *Sink) SetQuality(q int) {
 	s.quality = &q
 }
