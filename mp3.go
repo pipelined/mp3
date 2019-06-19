@@ -7,11 +7,10 @@ import (
 	"fmt"
 	"io"
 
+	mp3 "github.com/hajimehoshi/go-mp3"
 	"github.com/viert/lame"
 
 	"github.com/pipelined/signal"
-
-	mp3 "github.com/hajimehoshi/go-mp3"
 )
 
 // ChannelMode determines how channel data will be encoded.
@@ -67,7 +66,7 @@ func (p *Pump) Pump(sourceID string, bufferSize int) (func() ([][]float64, error
 	// current decoder always provides stereo, so constant
 	numChannels := 2
 	sampleRate := p.d.SampleRate()
-	
+
 	size := bufferSize * numChannels
 	var val int16
 	return func() ([][]float64, error) {
@@ -78,9 +77,9 @@ func (p *Pump) Pump(sourceID string, bufferSize int) (func() ([][]float64, error
 		for read < size {
 			err = binary.Read(p.d, binary.LittleEndian, &val) // read next frame
 			if err != nil {
-				if err == io.EOF { 
+				if err == io.EOF {
 					break // no more bytes available
-				} else { 
+				} else {
 					return nil, err
 				}
 			}
@@ -93,7 +92,7 @@ func (p *Pump) Pump(sourceID string, bufferSize int) (func() ([][]float64, error
 			return nil, io.EOF
 		}
 
-		// trim and convert the buffer 
+		// trim and convert the buffer
 		b := signal.InterInt{
 			Data:        ints[:read],
 			NumChannels: numChannels,
