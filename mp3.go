@@ -56,7 +56,7 @@ type Pump struct {
 }
 
 // Pump reads buffer from mp3.
-func (p *Pump) Pump(sourceID string, bufferSize int) (func() ([][]float64, error), int, int, error) {
+func (p *Pump) Pump(sourceID string) (func(int) ([][]float64, error), int, int, error) {
 	d, err := mp3.NewDecoder(p)
 	if err != nil {
 		return nil, 0, 0, err
@@ -67,12 +67,20 @@ func (p *Pump) Pump(sourceID string, bufferSize int) (func() ([][]float64, error
 	numChannels := 2
 	sampleRate := p.d.SampleRate()
 
-	size := bufferSize * numChannels
-	var val int16
-	return func() ([][]float64, error) {
-		var err error
-		var read int
-		ints := make([]int, size)
+	var (
+		val  int16
+		ints []int
+		size int
+	)
+	return func(bufferSize int) ([][]float64, error) {
+		var (
+			err  error
+			read int
+		)
+		if size != bufferSize {
+			size = bufferSize * numChannels
+			ints = make([]int, size)
+		}
 
 		for read < size {
 			err = binary.Read(p.d, binary.LittleEndian, &val) // read next frame
@@ -129,7 +137,7 @@ func (s *Sink) SetQuality(q int) {
 }
 
 // Sink writes buffer into destination.
-func (s *Sink) Sink(sourceID string, sampleRate, numChannels, bufferSize int) (func([][]float64) error, error) {
+func (s *Sink) Sink(sourceID string, sampleRate, numChannels int) (func([][]float64) error, error) {
 	s.w = lame.NewWriter(s)
 	s.BitRateMode.apply(s.w)
 

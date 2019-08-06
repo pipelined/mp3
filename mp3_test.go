@@ -104,18 +104,18 @@ func TestMp3(t *testing.T) {
 			sink.SetQuality(test.quality)
 		}
 
-		pumpFn, sampleRate, numChannles, err := pump.Pump("", bufferSize)
+		pumpFn, sampleRate, numChannles, err := pump.Pump("")
 		assert.NotNil(t, pumpFn)
 		assert.Nil(t, err)
 
-		sinkFn, err := sink.Sink("", sampleRate, numChannles, bufferSize)
+		sinkFn, err := sink.Sink("", sampleRate, numChannles)
 		assert.NotNil(t, sinkFn)
 		assert.Nil(t, err)
 
 		var buf [][]float64
 		messages, samples := 0, 0
 		for err == nil {
-			buf, err = pumpFn()
+			buf, err = pumpFn(bufferSize)
 			_ = sinkFn(buf)
 			messages++
 			if buf != nil {
