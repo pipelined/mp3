@@ -68,16 +68,18 @@ func (p *Pump) Pump(sourceID string) (func(int) ([][]float64, error), int, int, 
 	sampleRate := p.d.SampleRate()
 
 	var (
-		val  int16
-		ints []int
-		size int
+		val               int16
+		ints              []int
+		size              int
+		currentBufferSize int
 	)
 	return func(bufferSize int) ([][]float64, error) {
 		var (
 			err  error
 			read int
 		)
-		if size != bufferSize {
+		if currentBufferSize != bufferSize {
+			currentBufferSize = bufferSize
 			size = bufferSize * numChannels
 			ints = make([]int, size)
 		}
@@ -108,7 +110,7 @@ func (p *Pump) Pump(sourceID string) (func(int) ([][]float64, error), int, int, 
 		}.AsFloat64()
 
 		// read not enough samples
-		if read != bufferSize {
+		if read != size {
 			return b, io.ErrUnexpectedEOF
 		}
 		return b, nil
