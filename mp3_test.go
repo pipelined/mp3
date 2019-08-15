@@ -11,6 +11,7 @@ import (
 
 const (
 	bufferSize = 512
+	mp3Samples = 332928
 	sample     = "_testdata/sample.mp3"
 	out        = "_testdata/out"
 )
@@ -89,6 +90,7 @@ func TestMp3(t *testing.T) {
 	}
 
 	for i, test := range tests {
+		t.Logf("Test: %d of %d VBR: %d\n", i+1, len(tests), test.vbr)
 		inFile, err := os.Open(test.inFile)
 		assert.Nil(t, err)
 		pump := mp3.Pump{Reader: inFile}
@@ -113,15 +115,16 @@ func TestMp3(t *testing.T) {
 		assert.Nil(t, err)
 
 		var buf [][]float64
-		messages, samples := 0, 0
+		samples := 0
 		for err == nil {
 			buf, err = pumpFn(bufferSize)
 			_ = sinkFn(buf)
-			messages++
 			if buf != nil {
 				samples += len(buf[0])
 			}
 		}
+
+		assert.Equal(t, mp3Samples, samples)
 
 		err = sink.Flush("")
 		assert.Nil(t, err)
