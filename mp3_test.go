@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/pipelined/mp3"
+	"github.com/pipelined/signal"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -29,64 +30,64 @@ func TestMp3(t *testing.T) {
 			channelMode: mp3.JointStereo,
 			vbr:         mp3.CBR(320),
 		},
-		{
-			inFile:      sample,
-			channelMode: mp3.JointStereo,
-			vbr:         mp3.CBR(192),
-		},
-		{
-			inFile:      sample,
-			channelMode: mp3.JointStereo,
-			vbr:         mp3.ABR(220),
-		},
-		{
-			inFile:      sample,
-			channelMode: mp3.JointStereo,
-			vbr:         mp3.ABR(128),
-		},
-		{
-			inFile:      sample,
-			channelMode: mp3.JointStereo,
-			vbr:         mp3.VBR(0),
-		},
-		{
-			inFile:      sample,
-			channelMode: mp3.JointStereo,
-			vbr:         mp3.VBR(9),
-		},
-		{
-			inFile:      sample,
-			channelMode: mp3.Mono,
-			vbr:         mp3.VBR(9),
-		},
-		{
-			inFile:      sample,
-			channelMode: mp3.Mono,
-			vbr:         mp3.VBR(9),
-			useQuality:  true,
-			quality:     9,
-		},
-		{
-			inFile:      sample,
-			channelMode: mp3.JointStereo,
-			vbr:         mp3.VBR(0),
-			useQuality:  true,
-			quality:     0,
-		},
-		{
-			inFile:      sample,
-			channelMode: mp3.JointStereo,
-			vbr:         mp3.VBR(0),
-			useQuality:  true,
-			quality:     9,
-		},
-		{
-			inFile:      sample,
-			channelMode: mp3.Stereo,
-			vbr:         mp3.VBR(0),
-			useQuality:  true,
-			quality:     3,
-		},
+		// {
+		// 	inFile:      sample,
+		// 	channelMode: mp3.JointStereo,
+		// 	vbr:         mp3.CBR(192),
+		// },
+		// {
+		// 	inFile:      sample,
+		// 	channelMode: mp3.JointStereo,
+		// 	vbr:         mp3.ABR(220),
+		// },
+		// {
+		// 	inFile:      sample,
+		// 	channelMode: mp3.JointStereo,
+		// 	vbr:         mp3.ABR(128),
+		// },
+		// {
+		// 	inFile:      sample,
+		// 	channelMode: mp3.JointStereo,
+		// 	vbr:         mp3.VBR(0),
+		// },
+		// {
+		// 	inFile:      sample,
+		// 	channelMode: mp3.JointStereo,
+		// 	vbr:         mp3.VBR(9),
+		// },
+		// {
+		// 	inFile:      sample,
+		// 	channelMode: mp3.Mono,
+		// 	vbr:         mp3.VBR(9),
+		// },
+		// {
+		// 	inFile:      sample,
+		// 	channelMode: mp3.Mono,
+		// 	vbr:         mp3.VBR(9),
+		// 	useQuality:  true,
+		// 	quality:     9,
+		// },
+		// {
+		// 	inFile:      sample,
+		// 	channelMode: mp3.JointStereo,
+		// 	vbr:         mp3.VBR(0),
+		// 	useQuality:  true,
+		// 	quality:     0,
+		// },
+		// {
+		// 	inFile:      sample,
+		// 	channelMode: mp3.JointStereo,
+		// 	vbr:         mp3.VBR(0),
+		// 	useQuality:  true,
+		// 	quality:     9,
+		// },
+		// {
+		// 	inFile:      sample,
+		// 	channelMode: mp3.Stereo,
+		// 	vbr:         mp3.VBR(0),
+		// 	useQuality:  true,
+		// 	quality:     3,
+		// },
 	}
 
 	for i, test := range tests {
@@ -114,10 +115,12 @@ func TestMp3(t *testing.T) {
 		assert.NotNil(t, sinkFn)
 		assert.Nil(t, err)
 
-		var buf [][]float64
+		buf := signal.Float64Buffer(numChannles, bufferSize)
 		samples := 0
-		for err == nil {
-			buf, err = pumpFn(bufferSize)
+		for {
+			if err := pumpFn(buf); err != nil {
+				break
+			}
 			_ = sinkFn(buf)
 			if buf != nil {
 				samples += len(buf[0])
