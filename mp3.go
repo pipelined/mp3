@@ -56,65 +56,62 @@ type Pump struct {
 }
 
 // Pump reads buffer from mp3.
-func (p *Pump) Pump(sourceID string) (func(int) ([][]float64, error), int, int, error) {
+func (p *Pump) Pump(sourceID string) (func(signal.Float64) error, signal.SampleRate, int, error) {
 	d, err := mp3.NewDecoder(p)
 	if err != nil {
 		return nil, 0, 0, err
 	}
 	p.d = d
 
-	// current decoder always provides stereo, so constant
+	// current decoder always provides stereo, so constant.
 	numChannels := 2
-	sampleRate := p.d.SampleRate()
 
-	var (
-		ints              []int
-		size              int
-		currentBufferSize int
-	)
-	return func(bufferSize int) ([][]float64, error) {
+	// buffer for output mapping.
+	ints := signal.InterInt{
+		NumChannels: numChannels,
+		BitDepth:    signal.BitDepth16,
+	}
+	// current size of the buffer.
+	var size int
+	return func(b signal.Float64) error {
+		// reset buffer size if needed.
+		if b.Size() != size {
+			size = b.Size()
+			ints.Data = make([]int, b.Size()*numChannels)
+		}
+
 		var (
 			read int
 			val  int16
-			err  error
 		)
-		if currentBufferSize != bufferSize {
-			currentBufferSize = bufferSize
-			size = bufferSize * numChannels
-			ints = make([]int, size)
-		}
-
-		for read < size {
-			err = binary.Read(p.d, binary.LittleEndian, &val) // read next frame
-			if err != nil {
+		for read < len(ints.Data) {
+			// read next frame
+			if err := binary.Read(p.d, binary.LittleEndian, &val); err != nil {
 				if err == io.EOF {
 					break // no more bytes available
-				} else {
-					return nil, err
 				}
+				return fmt.Errorf("failed to read mp3 data: %w", err)
 			}
-			ints[read] = int(val)
+			ints.Data[read] = int(val)
 			read++
 		}
 
-		// nothing was read
+		// nothing was read.
 		if read == 0 {
-			return nil, io.EOF
+			return io.EOF
+		}
+		// trim buffers.
+		if read != len(ints.Data) {
+			ints.Data = ints.Data[:read]
+			for i := range b {
+				b[i] = b[i][:ints.Size()]
+			}
 		}
 
-		// trim and convert the buffer
-		b := signal.InterInt{
-			Data:        ints[:read],
-			NumChannels: numChannels,
-			BitDepth:    signal.BitDepth16,
-		}.AsFloat64()
-
-		// read not enough samples
-		if b.Size() != bufferSize {
-			return b, io.ErrUnexpectedEOF
-		}
-		return b, nil
-	}, sampleRate, numChannels, nil
+		// convert the buffer.
+		ints.CopyToFloat64(b)
+		return nil
+	}, signal.SampleRate(p.d.SampleRate()), numChannels, nil
 }
 
 // Sink allows to write mp3 files.
@@ -139,7 +136,7 @@ func (s *Sink) SetQuality(q int) {
 }
 
 // Sink writes buffer into destination.
-func (s *Sink) Sink(sourceID string, sampleRate, numChannels int) (func([][]float64) error, error) {
+func (s *Sink) Sink(sourceID string, sampleRate signal.SampleRate, numChannels int) (func(signal.Float64) error, error) {
 	s.w = lame.NewWriter(s)
 	s.BitRateMode.apply(s.w)
 
@@ -148,14 +145,23 @@ func (s *Sink) Sink(sourceID string, sampleRate, numChannels int) (func([][]floa
 		s.w.Encoder.SetQuality(int(q))
 	}
 	setChannelMode(s.w, s.ChannelMode)
-	s.w.Encoder.SetInSamplerate(sampleRate)
+	s.w.Encoder.SetInSamplerate(int(sampleRate))
 	s.w.Encoder.SetNumChannels(numChannels)
 	s.w.Encoder.InitParams()
-	return func(b [][]float64) error {
-		buf := new(bytes.Buffer)
-		ints := signal.Float64(b).AsInterInt(signal.BitDepth16, false)
-		for i := range ints {
-			if err := binary.Write(buf, binary.LittleEndian, int16(ints[i])); err != nil {
+	ints := signal.InterInt{
+		BitDepth:    signal.BitDepth16,
+		NumChannels: numChannels,
+	}
+	var buf *bytes.Buffer
+	return func(b signal.Float64) error {
+		if b.Size() != ints.Size() {
+			ints.Data = make([]int, b.Size()*numChannels)
+			buf = bytes.NewBuffer(make([]byte, 0, len(ints.Data)*2))
+		}
+		buf.Reset()
+		b.CopyToInterInt(ints)
+		for _, v := range ints.Data {
+			if err := binary.Write(buf, binary.LittleEndian, int16(v)); err != nil {
 				return err
 			}
 		}
