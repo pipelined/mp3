@@ -52,16 +52,16 @@ type (
 // This component cannot be reused for consequent runs.
 type Pump struct {
 	io.Reader
-	d *mp3.Decoder
+	decoder *mp3.Decoder
 }
 
 // Pump reads buffer from mp3.
 func (p *Pump) Pump(sourceID string) (func(signal.Float64) error, signal.SampleRate, int, error) {
-	d, err := mp3.NewDecoder(p)
+	decoder, err := mp3.NewDecoder(p)
 	if err != nil {
 		return nil, 0, 0, err
 	}
-	p.d = d
+	p.decoder = decoder
 
 	// current decoder always provides stereo, so constant.
 	numChannels := 2
@@ -71,12 +71,9 @@ func (p *Pump) Pump(sourceID string) (func(signal.Float64) error, signal.SampleR
 		NumChannels: numChannels,
 		BitDepth:    signal.BitDepth16,
 	}
-	// current size of the buffer.
-	var size int
 	return func(b signal.Float64) error {
 		// reset buffer size if needed.
-		if b.Size() != size {
-			size = b.Size()
+		if ints.Size() != b.Size() {
 			ints.Data = make([]int, b.Size()*numChannels)
 		}
 
@@ -86,11 +83,11 @@ func (p *Pump) Pump(sourceID string) (func(signal.Float64) error, signal.SampleR
 		)
 		for read < len(ints.Data) {
 			// read next frame
-			if err := binary.Read(p.d, binary.LittleEndian, &val); err != nil {
+			if err := binary.Read(p.decoder, binary.LittleEndian, &val); err != nil {
 				if err == io.EOF {
 					break // no more bytes available
 				}
-				return fmt.Errorf("failed to read mp3 data: %w", err)
+				return fmt.Errorf("failed to read mp3 data: %writer", err)
 			}
 			ints.Data[read] = int(val)
 			read++
@@ -111,7 +108,7 @@ func (p *Pump) Pump(sourceID string) (func(signal.Float64) error, signal.SampleR
 		// convert the buffer.
 		ints.CopyToFloat64(b)
 		return nil
-	}, signal.SampleRate(p.d.SampleRate()), numChannels, nil
+	}, signal.SampleRate(p.decoder.SampleRate()), numChannels, nil
 }
 
 // Sink allows to write mp3 files.
@@ -120,12 +117,12 @@ type Sink struct {
 	BitRateMode
 	ChannelMode
 	quality *int
-	w       *lame.LameWriter
+	writer  *lame.LameWriter
 }
 
 // Flush cleans up buffers.
 func (s *Sink) Flush(string) error {
-	return s.w.Close()
+	return s.writer.Close()
 }
 
 // SetQuality sets the quality to the lame encoder.
@@ -137,17 +134,16 @@ func (s *Sink) SetQuality(q int) {
 
 // Sink writes buffer into destination.
 func (s *Sink) Sink(sourceID string, sampleRate signal.SampleRate, numChannels int) (func(signal.Float64) error, error) {
-	s.w = lame.NewWriter(s)
-	s.BitRateMode.apply(s.w)
+	s.writer = lame.NewWriter(s)
+	s.BitRateMode.apply(s.writer)
 
 	if s.quality != nil {
-		q := *s.quality
-		s.w.Encoder.SetQuality(int(q))
+		s.writer.Encoder.SetQuality(*s.quality)
 	}
-	setChannelMode(s.w, s.ChannelMode)
-	s.w.Encoder.SetInSamplerate(int(sampleRate))
-	s.w.Encoder.SetNumChannels(numChannels)
-	s.w.Encoder.InitParams()
+	setChannelMode(s.writer, s.ChannelMode)
+	s.writer.Encoder.SetInSamplerate(int(sampleRate))
+	s.writer.Encoder.SetNumChannels(numChannels)
+	s.writer.Encoder.InitParams()
 	ints := signal.InterInt{
 		BitDepth:    signal.BitDepth16,
 		NumChannels: numChannels,
@@ -165,38 +161,38 @@ func (s *Sink) Sink(sourceID string, sampleRate signal.SampleRate, numChannels i
 				return err
 			}
 		}
-		if _, err := s.w.Write(buf.Bytes()); err != nil {
+		if _, err := s.writer.Write(buf.Bytes()); err != nil {
 			return err
 		}
 		return nil
 	}, nil
 }
 
-func (vbr VBR) apply(w *lame.LameWriter) {
-	w.Encoder.SetVBR(lame.VBR_MTRH)
-	w.Encoder.SetVBRQuality(int(vbr))
+func (vbr VBR) apply(writer *lame.LameWriter) {
+	writer.Encoder.SetVBR(lame.VBR_MTRH)
+	writer.Encoder.SetVBRQuality(int(vbr))
 }
 
 func (vbr VBR) String() string {
-	return fmt.Sprintf("VBR(%d)", vbr)
+	return fmt.Sprintf("vbr-%d", vbr)
 }
 
-func (abr ABR) apply(w *lame.LameWriter) {
-	w.Encoder.SetVBR(lame.VBR_ABR)
-	w.Encoder.SetVBRAverageBitRate(int(abr))
+func (abr ABR) apply(writer *lame.LameWriter) {
+	writer.Encoder.SetVBR(lame.VBR_ABR)
+	writer.Encoder.SetVBRAverageBitRate(int(abr))
 }
 
 func (abr ABR) String() string {
-	return fmt.Sprintf("ABR(%d)", abr)
+	return fmt.Sprintf("abr-%d", abr)
 }
 
-func (cbr CBR) apply(w *lame.LameWriter) {
-	w.Encoder.SetVBR(lame.VBR_OFF)
-	w.Encoder.SetBitrate(int(cbr))
+func (cbr CBR) apply(writer *lame.LameWriter) {
+	writer.Encoder.SetVBR(lame.VBR_OFF)
+	writer.Encoder.SetBitrate(int(cbr))
 }
 
 func (cbr CBR) String() string {
-	return fmt.Sprintf("CBR(%d)", cbr)
+	return fmt.Sprintf("cbr-%d", cbr)
 }
 
 // setMode assigns mode to the sink.
