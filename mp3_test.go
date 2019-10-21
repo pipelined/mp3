@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/pipelined/mp3"
+	"github.com/pipelined/signal"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -95,7 +96,7 @@ func TestMp3(t *testing.T) {
 		assert.Nil(t, err)
 		pump := mp3.Pump{Reader: inFile}
 
-		outFile, err := os.Create(fmt.Sprintf("%s_%d_%s.mp3", out, i, test.vbr))
+		outFile, err := os.Create(fmt.Sprintf("%s-%d-%s.mp3", out, i, test.vbr))
 		assert.Nil(t, err)
 		sink := &mp3.Sink{
 			Writer:      outFile,
@@ -114,10 +115,12 @@ func TestMp3(t *testing.T) {
 		assert.NotNil(t, sinkFn)
 		assert.Nil(t, err)
 
-		var buf [][]float64
+		buf := signal.Float64Buffer(numChannles, bufferSize)
 		samples := 0
-		for err == nil {
-			buf, err = pumpFn(bufferSize)
+		for {
+			if err := pumpFn(buf); err != nil {
+				break
+			}
 			_ = sinkFn(buf)
 			if buf != nil {
 				samples += len(buf[0])
