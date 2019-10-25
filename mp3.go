@@ -59,7 +59,7 @@ type Pump struct {
 func (p *Pump) Pump(sourceID string) (func(signal.Float64) error, signal.SampleRate, int, error) {
 	decoder, err := mp3.NewDecoder(p)
 	if err != nil {
-		return nil, 0, 0, err
+		return nil, 0, 0, fmt.Errorf("error creating MP3 decoder: %w", err)
 	}
 	p.decoder = decoder
 
@@ -87,7 +87,7 @@ func (p *Pump) Pump(sourceID string) (func(signal.Float64) error, signal.SampleR
 				if err == io.EOF {
 					break // no more bytes available
 				}
-				return fmt.Errorf("failed to read mp3 data: %writer", err)
+				return fmt.Errorf("error reading MP3 data: %w", err)
 			}
 			ints.Data[read] = int(val)
 			read++
@@ -158,11 +158,11 @@ func (s *Sink) Sink(sourceID string, sampleRate signal.SampleRate, numChannels i
 		b.CopyToInterInt(ints)
 		for _, v := range ints.Data {
 			if err := binary.Write(buf, binary.LittleEndian, int16(v)); err != nil {
-				return err
+				return fmt.Errorf("error writing binary data: %w", err)
 			}
 		}
 		if _, err := s.writer.Write(buf.Bytes()); err != nil {
-			return err
+			return fmt.Errorf("error writing MP3 buffer: %w", err)
 		}
 		return nil
 	}, nil
