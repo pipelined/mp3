@@ -10,7 +10,7 @@ import (
 	mp3 "github.com/hajimehoshi/go-mp3"
 	"github.com/viert/lame"
 
-	"github.com/pipelined/signal"
+	"pipelined.dev/signal"
 )
 
 // ChannelMode determines how channel data will be encoded.
