@@ -5,9 +5,10 @@ import (
 	"os"
 	"testing"
 
-	"github.com/pipelined/mp3"
-	"github.com/pipelined/signal"
 	"github.com/stretchr/testify/assert"
+
+	"pipelined.dev/mp3"
+	"pipelined.dev/signal"
 )
 
 const (
