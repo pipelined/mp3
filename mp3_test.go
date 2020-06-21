@@ -6,7 +6,7 @@ import (
 	"os"
 	"testing"
 
-	"pipelined.dev/mp3"
+	"pipelined.dev/audio/mp3"
 	"pipelined.dev/pipe"
 )
 
