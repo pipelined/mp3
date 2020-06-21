@@ -1,4 +1,4 @@
-module pipelined.dev/mp3
+module pipelined.dev/audio/mp3
 
 require (
 	github.com/hajimehoshi/go-mp3 v0.3.0
