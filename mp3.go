@@ -1,4 +1,5 @@
-// Package mp3 provides pipe components that allow to read/write signal encoded in mp3 format.
+// Package mp3 provides pipe components that allow to read/write signal
+// encoded in mp3 format.
 package mp3
 
 import (
@@ -19,17 +20,20 @@ import (
 type ChannelMode int
 
 const (
-	// Mono forcibly generates a mono file. If the input file is a stereo file,
-	// the input stream will be read as a mono by averaging the left and right channels.
+	// Mono forcibly generates a mono file. If the input file is a stereo
+	// file, the input stream will be read as a mono by averaging the left
+	// and right channels.
 	Mono ChannelMode = iota
-	// Stereo makes no use of potential similarity between the two input channels.
-	// It can, however, negotiate the bit demand between both channels, i.e. give
-	// one channel more bits if the other contains silence.
+	// Stereo makes no use of potential similarity between the two input
+	// channels. It can, however, negotiate the bit demand between both
+	// channels, i.e. give one channel more bits if the other contains
+	// silence.
 	Stereo
-	// JointStereo make use of a correlation between both channels. The signal
-	// will be matrixed into a sum ("mid") and difference ("side") signal. For quasi-mono
-	// signals, this will give a significant gain in encoding quality. This mode does
-	// not destroy phase information like IS stereo that may be used by other encoders.
+	// JointStereo make use of a correlation between both channels. The
+	// signal will be matrixed into a sum ("mid") and difference ("side")
+	// signal. For quasi-mono signals, this will give a significant gain in
+	// encoding quality. This mode does not destroy phase information like
+	// IS stereo that may be used by other encoders.
 	JointStereo
 )
 
@@ -123,9 +127,9 @@ func (s *Sink) Flush(context.Context) error {
 	return s.writer.Close()
 }
 
-// SetQuality sets the quality to the lame encoder.
-// Quality determines encoding algorithm quality. It doesn't affect file size.
-// Use [0-9] values. It is strictly optional. Default 5 is used if no value provided.
+// SetQuality sets the quality to the lame encoder. Quality determines
+// encoding algorithm quality. It doesn't affect file size. Use [0-9]
+// values. It is strictly optional. Default 5 is used if no value provided.
 func (s *Sink) SetQuality(q int) {
 	s.quality = &q
 }
