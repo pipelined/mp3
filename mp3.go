@@ -54,21 +54,19 @@ type (
 	CBR int
 )
 
-// Pump allows to read mp3 data.
+// Source allows to read mp3 data.
 // This component cannot be reused for consequent runs.
-type Pump struct {
+type Source struct {
 	io.Reader
-	decoder *mp3.Decoder
 }
 
 // Pump reads buffer from mp3.
-func (p *Pump) Pump() pipe.SourceAllocatorFunc {
+func (s Source) Pump() pipe.SourceAllocatorFunc {
 	return func(bufferSize int) (pipe.Source, pipe.SignalProperties, error) {
-		decoder, err := mp3.NewDecoder(p)
+		decoder, err := mp3.NewDecoder(s)
 		if err != nil {
 			return pipe.Source{}, pipe.SignalProperties{}, fmt.Errorf("error creating MP3 decoder: %w", err)
 		}
-		p.decoder = decoder
 
 		// current decoder always provides stereo, so constant.
 		channels := 2
@@ -77,21 +75,23 @@ func (p *Pump) Pump() pipe.SourceAllocatorFunc {
 			Capacity: bufferSize,
 			Length:   bufferSize,
 		}.Int16(signal.BitDepth16)
-		return pipe.Source{SourceFunc: p.source(ints)},
+		return pipe.Source{
+				SourceFunc: source(decoder, ints),
+			},
 			pipe.SignalProperties{
 				Channels:   channels,
-				SampleRate: signal.SampleRate(p.decoder.SampleRate()),
+				SampleRate: signal.SampleRate(decoder.SampleRate()),
 			},
 			nil
 	}
 }
 
-func (p *Pump) source(ints signal.Signed) pipe.SourceFunc {
+func source(decoder *mp3.Decoder, ints signal.Signed) pipe.SourceFunc {
 	return func(floats signal.Floating) (int, error) {
 		var read int // total number of read samples
 		for read < ints.Len() {
 			var sample int16
-			if err := binary.Read(p.decoder, binary.LittleEndian, &sample); err != nil {
+			if err := binary.Read(decoder, binary.LittleEndian, &sample); err != nil {
 				// because EOF returns only when nothing was read.
 				if err == io.EOF {
 					break // no more bytes available
