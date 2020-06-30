@@ -16,44 +16,6 @@ import (
 	"pipelined.dev/signal"
 )
 
-// ChannelMode determines how channel data will be encoded.
-type ChannelMode int
-
-const (
-	// Mono forcibly generates a mono file. If the input file is a stereo
-	// file, the input stream will be read as a mono by averaging the left
-	// and right channels.
-	Mono ChannelMode = iota
-	// Stereo makes no use of potential similarity between the two input
-	// channels. It can, however, negotiate the bit demand between both
-	// channels, i.e. give one channel more bits if the other contains
-	// silence.
-	Stereo
-	// JointStereo make use of a correlation between both channels. The
-	// signal will be matrixed into a sum ("mid") and difference ("side")
-	// signal. For quasi-mono signals, this will give a significant gain in
-	// encoding quality. This mode does not destroy phase information like
-	// IS stereo that may be used by other encoders.
-	JointStereo
-)
-
-type (
-	// BitRateMode determines which VBR setting is going to be used.
-	BitRateMode interface {
-		apply(*lame.LameWriter)
-		fmt.Stringer
-	}
-
-	// VBR uses variable bit rate. Values: [0..10]
-	VBR int
-
-	// ABR uses average bit rate. Values: [8..320]
-	ABR int
-
-	// CBR uses constant bit rate. Values: [8..320]
-	CBR int
-)
-
 // Source allows to read mp3 data.
 // This component cannot be reused for consequent runs.
 type Source struct {
@@ -113,53 +75,101 @@ func source(decoder *mp3.Decoder, ints signal.Signed) pipe.SourceFunc {
 	}
 }
 
-// Sink allows to write mp3 files.
+// ChannelMode determines how channel data will be encoded.
+type ChannelMode int
+
+const (
+	// Mono forcibly generates a mono file. If the input file is a stereo
+	// file, the input stream will be read as a mono by averaging the left
+	// and right channels.
+	Mono ChannelMode = iota
+	// Stereo makes no use of potential similarity between the two input
+	// channels. It can, however, negotiate the bit demand between both
+	// channels, i.e. give one channel more bits if the other contains
+	// silence.
+	Stereo
+	// JointStereo make use of a correlation between both channels. The
+	// signal will be matrixed into a sum ("mid") and difference ("side")
+	// signal. For quasi-mono signals, this will give a significant gain in
+	// encoding quality. This mode does not destroy phase information like
+	// IS stereo that may be used by other encoders.
+	JointStereo
+)
+
+type (
+	// BitRateMode determines which VBR setting is going to be used.
+	BitRateMode interface {
+		apply(*lame.LameWriter)
+		fmt.Stringer
+	}
+
+	// VBR uses variable bit rate. Values: [0..10]
+	VBR int
+
+	// ABR uses average bit rate. Values: [8..320]
+	ABR int
+
+	// CBR uses constant bit rate. Values: [8..320]
+	CBR int
+)
+
+// Quality determines encoding algorithm quality. It doesn't affect
+// file size. Use [0-9] values.
+type Quality int
+
+func setQuality(encoder *lame.LameWriter, eq *Quality) {
+	if eq == nil {
+		return
+	}
+
+	if *eq < 0 {
+		encoder.Encoder.SetQuality(0)
+	} else if *eq > 9 {
+		encoder.Encoder.SetQuality(0)
+	} else {
+		encoder.Encoder.SetQuality(int(*eq))
+	}
+}
+
+// Sink allows to write mp3 files. Encoding quality is optional. Default
+// value is 5.
 type Sink struct {
 	io.Writer
 	BitRateMode
 	ChannelMode
-	quality *int
-	writer  *lame.LameWriter
+	EncodingQuality *Quality
 }
 
-// Flush cleans up buffers.
-func (s *Sink) Flush(context.Context) error {
-	return s.writer.Close()
-}
-
-// SetQuality sets the quality to the lame encoder. Quality determines
-// encoding algorithm quality. It doesn't affect file size. Use [0-9]
-// values. It is strictly optional. Default 5 is used if no value provided.
-func (s *Sink) SetQuality(q int) {
-	s.quality = &q
+// EncodingQuality returns new Quality value from int. Can be used for sink
+// composite literal.
+func EncodingQuality(v int) *Quality {
+	return (*Quality)(&v)
 }
 
 // Sink writes buffer into destination.
-func (s *Sink) Sink() pipe.SinkAllocatorFunc {
+func (s Sink) Sink() pipe.SinkAllocatorFunc {
 	return func(bufferSize int, props pipe.SignalProperties) (pipe.Sink, error) {
-		s.writer = lame.NewWriter(s)
-		s.BitRateMode.apply(s.writer)
+		encoder := lame.NewWriter(s)
+		s.BitRateMode.apply(encoder)
 
-		if s.quality != nil {
-			s.writer.Encoder.SetQuality(*s.quality)
-		}
-		setChannelMode(s.writer, s.ChannelMode)
-		s.writer.Encoder.SetInSamplerate(int(props.SampleRate))
-		s.writer.Encoder.SetNumChannels(int(props.Channels))
-		s.writer.Encoder.InitParams()
+		setQuality(encoder, s.EncodingQuality)
+		setChannelMode(encoder, s.ChannelMode)
+		encoder.Encoder.SetInSamplerate(int(props.SampleRate))
+		encoder.Encoder.SetNumChannels(int(props.Channels))
+		encoder.Encoder.InitParams()
 		ints := signal.Allocator{
 			Channels: props.Channels,
 			Capacity: bufferSize,
 			Length:   bufferSize,
 		}.Int16(signal.BitDepth16)
 		return pipe.Sink{
-			SinkFunc:  s.sink(ints),
-			FlushFunc: s.Flush,
+			SinkFunc:  sink(encoder, ints),
+			FlushFunc: encoderFlusher(encoder),
 		}, nil
 	}
 }
 
-func (s *Sink) sink(ints signal.Signed) pipe.SinkFunc {
+func sink(encoder *lame.LameWriter, ints signal.Signed) pipe.SinkFunc {
 	bytesBuf := bytes.NewBuffer(make([]byte, 0, ints.Len()))
 	return func(floats signal.Floating) error {
 		if n := signal.FloatingAsSigned(floats, ints); n != ints.Length() {
@@ -175,8 +185,17 @@ func (s *Sink) sink(ints signal.Signed) pipe.SinkFunc {
 				return fmt.Errorf("error writing binary data: %w", err)
 			}
 		}
-		if _, err := s.writer.Write(bytesBuf.Bytes()); err != nil {
+		if _, err := encoder.Write(bytesBuf.Bytes()); err != nil {
 			return fmt.Errorf("error writing MP3 buffer: %w", err)
+		}
+		return nil
+	}
+}
+
+func encoderFlusher(encoder *lame.LameWriter) pipe.FlushFunc {
+	return func(context.Context) error {
+		if err := encoder.Close(); err != nil {
+			return fmt.Errorf("error flushing WAV encoder: %w", err)
 		}
 		return nil
 	}
