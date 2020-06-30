@@ -93,16 +93,18 @@ func TestMp3(t *testing.T) {
 	for i, test := range tests {
 		t.Logf("Test: %d of %d VBR: %d\n", i+1, len(tests), test.vbr)
 		inFile, _ := os.Open(test.inFile)
-		pumpAllocator := mp3.Pump{Reader: inFile}
+		pumpAllocator := mp3.Source{Reader: inFile}
 
 		outFile, _ := os.Create(fmt.Sprintf("%s-%d-%s.mp3", out, i, test.vbr))
-		sinkAllocator := &mp3.Sink{
-			Writer:      outFile,
-			ChannelMode: test.channelMode,
-			BitRateMode: test.vbr,
-		}
+		var quality *mp3.Quality
 		if test.useQuality {
-			sinkAllocator.SetQuality(test.quality)
+			quality = mp3.EncodingQuality(test.quality)
+		}
+		sinkAllocator := mp3.Sink{
+			Writer:          outFile,
+			ChannelMode:     test.channelMode,
+			BitRateMode:     test.vbr,
+			EncodingQuality: quality,
 		}
 
 		line, _ := pipe.Routing{

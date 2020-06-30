@@ -16,6 +16,65 @@ import (
 	"pipelined.dev/signal"
 )
 
+// Source allows to read mp3 data.
+// This component cannot be reused for consequent runs.
+type Source struct {
+	io.Reader
+}
+
+// Pump reads buffer from mp3.
+func (s Source) Pump() pipe.SourceAllocatorFunc {
+	return func(bufferSize int) (pipe.Source, pipe.SignalProperties, error) {
+		decoder, err := mp3.NewDecoder(s)
+		if err != nil {
+			return pipe.Source{}, pipe.SignalProperties{}, fmt.Errorf("error creating MP3 decoder: %w", err)
+		}
+
+		// current decoder always provides stereo, so constant.
+		channels := 2
+		ints := signal.Allocator{
+			Channels: channels,
+			Capacity: bufferSize,
+			Length:   bufferSize,
+		}.Int16(signal.BitDepth16)
+		return pipe.Source{
+				SourceFunc: source(decoder, ints),
+			},
+			pipe.SignalProperties{
+				Channels:   channels,
+				SampleRate: signal.SampleRate(decoder.SampleRate()),
+			},
+			nil
+	}
+}
+
+func source(decoder *mp3.Decoder, ints signal.Signed) pipe.SourceFunc {
+	return func(floats signal.Floating) (int, error) {
+		var read int // total number of read samples
+		for read < ints.Len() {
+			var sample int16
+			if err := binary.Read(decoder, binary.LittleEndian, &sample); err != nil {
+				// because EOF returns only when nothing was read.
+				if err == io.EOF {
+					break // no more bytes available
+				}
+				return read, fmt.Errorf("error reading MP3 data: %w", err)
+			}
+			ints.SetSample(read, int64(sample))
+			read++
+		}
+
+		// nothing was read, source is done.
+		if read == 0 {
+			return 0, io.EOF
+		}
+		if read != ints.Len() {
+			return signal.SignedAsFloating(ints.Slice(0, signal.ChannelLength(read, ints.Channels())), floats), nil
+		}
+		return signal.SignedAsFloating(ints, floats), nil
+	}
+}
+
 // ChannelMode determines how channel data will be encoded.
 type ChannelMode int
 
@@ -54,112 +113,63 @@ type (
 	CBR int
 )
 
-// Pump allows to read mp3 data.
-// This component cannot be reused for consequent runs.
-type Pump struct {
-	io.Reader
-	decoder *mp3.Decoder
-}
+// Quality determines encoding algorithm quality. It doesn't affect
+// file size. Use [0-9] values.
+type Quality int
 
-// Pump reads buffer from mp3.
-func (p *Pump) Pump() pipe.SourceAllocatorFunc {
-	return func(bufferSize int) (pipe.Source, pipe.SignalProperties, error) {
-		decoder, err := mp3.NewDecoder(p)
-		if err != nil {
-			return pipe.Source{}, pipe.SignalProperties{}, fmt.Errorf("error creating MP3 decoder: %w", err)
-		}
-		p.decoder = decoder
+func setQuality(encoder *lame.LameWriter, eq *Quality) {
+	if eq == nil {
+		return
+	}
 
-		// current decoder always provides stereo, so constant.
-		channels := 2
-		ints := signal.Allocator{
-			Channels: channels,
-			Capacity: bufferSize,
-			Length:   bufferSize,
-		}.Int16(signal.BitDepth16)
-		return pipe.Source{SourceFunc: p.source(ints)},
-			pipe.SignalProperties{
-				Channels:   channels,
-				SampleRate: signal.SampleRate(p.decoder.SampleRate()),
-			},
-			nil
+	if *eq < 0 {
+		encoder.Encoder.SetQuality(0)
+	} else if *eq > 9 {
+		encoder.Encoder.SetQuality(0)
+	} else {
+		encoder.Encoder.SetQuality(int(*eq))
 	}
 }
 
-func (p *Pump) source(ints signal.Signed) pipe.SourceFunc {
-	return func(floats signal.Floating) (int, error) {
-		var read int // total number of read samples
-		for read < ints.Len() {
-			var sample int16
-			if err := binary.Read(p.decoder, binary.LittleEndian, &sample); err != nil {
-				// because EOF returns only when nothing was read.
-				if err == io.EOF {
-					break // no more bytes available
-				}
-				return read, fmt.Errorf("error reading MP3 data: %w", err)
-			}
-			ints.SetSample(read, int64(sample))
-			read++
-		}
-
-		// nothing was read, source is done.
-		if read == 0 {
-			return 0, io.EOF
-		}
-		if read != ints.Len() {
-			return signal.SignedAsFloating(ints.Slice(0, signal.ChannelLength(read, ints.Channels())), floats), nil
-		}
-		return signal.SignedAsFloating(ints, floats), nil
-	}
-}
-
-// Sink allows to write mp3 files.
+// Sink allows to write mp3 files. Encoding quality is optional. Default
+// value is 5.
 type Sink struct {
 	io.Writer
 	BitRateMode
 	ChannelMode
-	quality *int
-	writer  *lame.LameWriter
+	EncodingQuality *Quality
 }
 
-// Flush cleans up buffers.
-func (s *Sink) Flush(context.Context) error {
-	return s.writer.Close()
-}
-
-// SetQuality sets the quality to the lame encoder. Quality determines
-// encoding algorithm quality. It doesn't affect file size. Use [0-9]
-// values. It is strictly optional. Default 5 is used if no value provided.
-func (s *Sink) SetQuality(q int) {
-	s.quality = &q
+// EncodingQuality returns new Quality value from int. Can be used for sink
+// composite literal.
+func EncodingQuality(v int) *Quality {
+	return (*Quality)(&v)
 }
 
 // Sink writes buffer into destination.
-func (s *Sink) Sink() pipe.SinkAllocatorFunc {
+func (s Sink) Sink() pipe.SinkAllocatorFunc {
 	return func(bufferSize int, props pipe.SignalProperties) (pipe.Sink, error) {
-		s.writer = lame.NewWriter(s)
-		s.BitRateMode.apply(s.writer)
+		encoder := lame.NewWriter(s)
+		s.BitRateMode.apply(encoder)
 
-		if s.quality != nil {
-			s.writer.Encoder.SetQuality(*s.quality)
-		}
-		setChannelMode(s.writer, s.ChannelMode)
-		s.writer.Encoder.SetInSamplerate(int(props.SampleRate))
-		s.writer.Encoder.SetNumChannels(int(props.Channels))
-		s.writer.Encoder.InitParams()
+		setQuality(encoder, s.EncodingQuality)
+		setChannelMode(encoder, s.ChannelMode)
+		encoder.Encoder.SetInSamplerate(int(props.SampleRate))
+		encoder.Encoder.SetNumChannels(int(props.Channels))
+		encoder.Encoder.InitParams()
 		ints := signal.Allocator{
 			Channels: props.Channels,
 			Capacity: bufferSize,
 			Length:   bufferSize,
 		}.Int16(signal.BitDepth16)
 		return pipe.Sink{
-			SinkFunc:  s.sink(ints),
-			FlushFunc: s.Flush,
+			SinkFunc:  sink(encoder, ints),
+			FlushFunc: encoderFlusher(encoder),
 		}, nil
 	}
 }
 
-func (s *Sink) sink(ints signal.Signed) pipe.SinkFunc {
+func sink(encoder *lame.LameWriter, ints signal.Signed) pipe.SinkFunc {
 	bytesBuf := bytes.NewBuffer(make([]byte, 0, ints.Len()))
 	return func(floats signal.Floating) error {
 		if n := signal.FloatingAsSigned(floats, ints); n != ints.Length() {
@@ -175,8 +185,17 @@ func (s *Sink) sink(ints signal.Signed) pipe.SinkFunc {
 				return fmt.Errorf("error writing binary data: %w", err)
 			}
 		}
-		if _, err := s.writer.Write(bytesBuf.Bytes()); err != nil {
+		if _, err := encoder.Write(bytesBuf.Bytes()); err != nil {
 			return fmt.Errorf("error writing MP3 buffer: %w", err)
+		}
+		return nil
+	}
+}
+
+func encoderFlusher(encoder *lame.LameWriter) pipe.FlushFunc {
+	return func(context.Context) error {
+		if err := encoder.Close(); err != nil {
+			return fmt.Errorf("error flushing WAV encoder: %w", err)
 		}
 		return nil
 	}
