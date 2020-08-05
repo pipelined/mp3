@@ -107,8 +107,10 @@ func TestMp3(t *testing.T) {
 				test.quality,
 			),
 		}.Line(bufferSize)
-		p := pipe.New(context.Background(), pipe.WithLines(line))
-		err := p.Wait()
+		err := pipe.New(
+			context.Background(),
+			pipe.WithLines(line),
+		).Wait()
 		if err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
