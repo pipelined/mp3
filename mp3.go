@@ -17,15 +17,9 @@ import (
 )
 
 // Source allows to read mp3 data.
-// This component cannot be reused for consequent runs.
-type Source struct {
-	io.Reader
-}
-
-// Pump reads buffer from mp3.
-func (s Source) Pump() pipe.SourceAllocatorFunc {
+func Source(r io.Reader) pipe.SourceAllocatorFunc {
 	return func(bufferSize int) (pipe.Source, pipe.SignalProperties, error) {
-		decoder, err := mp3.NewDecoder(s)
+		decoder, err := mp3.NewDecoder(r)
 		if err != nil {
 			return pipe.Source{}, pipe.SignalProperties{}, fmt.Errorf("error creating MP3 decoder: %w", err)
 		}
@@ -113,47 +107,37 @@ type (
 	CBR int
 )
 
-// Quality determines encoding algorithm quality. It doesn't affect
+// EncodingQuality determines encoding algorithm quality. It doesn't affect
 // file size. Use [0-9] values.
-type Quality int
+type EncodingQuality int
 
-func setQuality(encoder *lame.LameWriter, eq *Quality) {
-	if eq == nil {
+// DefaultEncodingQuality indicates that no custom quality should be used for
+// encoding algorithm.
+const DefaultEncodingQuality EncodingQuality = -1
+
+func setQuality(encoder *lame.LameWriter, q EncodingQuality) {
+	if q == DefaultEncodingQuality {
 		return
 	}
 
-	if *eq < 0 {
+	if q < 0 {
 		encoder.Encoder.SetQuality(0)
-	} else if *eq > 9 {
-		encoder.Encoder.SetQuality(0)
+	} else if q > 9 {
+		encoder.Encoder.SetQuality(9)
 	} else {
-		encoder.Encoder.SetQuality(int(*eq))
+		encoder.Encoder.SetQuality(int(q))
 	}
 }
 
-// Sink allows to write mp3 files. Encoding quality is optional. Default
-// value is 5.
-type Sink struct {
-	io.Writer
-	BitRateMode
-	ChannelMode
-	EncodingQuality *Quality
-}
-
-// EncodingQuality returns new Quality value from int. Can be used for sink
-// composite literal.
-func EncodingQuality(v int) *Quality {
-	return (*Quality)(&v)
-}
-
-// Sink writes buffer into destination.
-func (s Sink) Sink() pipe.SinkAllocatorFunc {
+// Sink allows to write mp3 files. Lame uses
+// 5 as default value if not provided.
+func Sink(w io.Writer, brm BitRateMode, cm ChannelMode, eq EncodingQuality) pipe.SinkAllocatorFunc {
 	return func(bufferSize int, props pipe.SignalProperties) (pipe.Sink, error) {
-		encoder := lame.NewWriter(s)
-		s.BitRateMode.apply(encoder)
+		encoder := lame.NewWriter(w)
+		brm.apply(encoder)
+		setQuality(encoder, eq)
+		setChannelMode(encoder, cm)
 
-		setQuality(encoder, s.EncodingQuality)
-		setChannelMode(encoder, s.ChannelMode)
 		encoder.Encoder.SetInSamplerate(int(props.SampleRate))
 		encoder.Encoder.SetNumChannels(int(props.Channels))
 		encoder.Encoder.InitParams()
