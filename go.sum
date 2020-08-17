@@ -9,7 +9,7 @@ golang.org/x/mobile v0.0.0-20190415191353-3e0bab5405d6/go.mod h1:E/iHnbuqvinMTCc
 golang.org/x/sys v0.0.0-20190312061237-fead79001313/go.mod h1:h1NjWce9XRLGQEsW7wpKNCjG9DtNlClVuFLEZdDNbEs=
 golang.org/x/sys v0.0.0-20190429190828-d89cdac9e872/go.mod h1:h1NjWce9XRLGQEsW7wpKNCjG9DtNlClVuFLEZdDNbEs=
 golang.org/x/text v0.3.0/go.mod h1:NqM8EUOU14njkJ3fqMW+pc6Ldnwhi/IjpwHt7yyuwOQ=
-pipelined.dev/pipe v0.8.1 h1:64OaXFlsn4s72bS+mlVgCnnH9tfZdbd/4unUQ6jCC1U=
-pipelined.dev/pipe v0.8.1/go.mod h1:vGXJKBk/tBWFjPFxkfk4w5lkDgFXheS6YwZvIE4WTxc=
-pipelined.dev/signal v0.7.2 h1:rF+K3D0RAhcFk6eHbaXezLWV76o3Hq8b1WROLfMKZRk=
-pipelined.dev/signal v0.7.2/go.mod h1:wi0YlA20+rinS9o+7IMZHH3/YsO3jkahHNLSCCfaEA0=
+pipelined.dev/pipe v0.8.4 h1:UFyH26AWW3GkVOWIla9zQYqDzbWW6NwdFDnvsrCKwVg=
+pipelined.dev/pipe v0.8.4/go.mod h1:VF3EecmES6UYXmO2yloIYgGgeCctUq2Dz0/h4GMjwAY=
+pipelined.dev/signal v0.8.0 h1:L66vzenF0F6R2XhFy0pOftb83mFDkVqVugKnvs0eS7M=
+pipelined.dev/signal v0.8.0/go.mod h1:wi0YlA20+rinS9o+7IMZHH3/YsO3jkahHNLSCCfaEA0=

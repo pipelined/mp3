@@ -20,99 +20,97 @@ const (
 func TestMp3(t *testing.T) {
 	tests := []struct {
 		inFile      string
-		vbr         mp3.BitRateMode
+		bitRateMode mp3.BitRateMode
 		channelMode mp3.ChannelMode
-		useQuality  bool
-		quality     int
+		quality     mp3.EncodingQuality
 	}{
 		{
 			inFile:      sample,
 			channelMode: mp3.JointStereo,
-			vbr:         mp3.CBR(320),
+			bitRateMode: mp3.CBR(320),
+			quality:     mp3.DefaultEncodingQuality,
 		},
 		{
 			inFile:      sample,
 			channelMode: mp3.JointStereo,
-			vbr:         mp3.CBR(192),
+			bitRateMode: mp3.CBR(192),
+			quality:     mp3.DefaultEncodingQuality,
 		},
 		{
 			inFile:      sample,
 			channelMode: mp3.JointStereo,
-			vbr:         mp3.ABR(220),
+			bitRateMode: mp3.ABR(220),
+			quality:     mp3.DefaultEncodingQuality,
 		},
 		{
 			inFile:      sample,
 			channelMode: mp3.JointStereo,
-			vbr:         mp3.ABR(128),
+			bitRateMode: mp3.ABR(128),
+			quality:     mp3.DefaultEncodingQuality,
 		},
 		{
 			inFile:      sample,
 			channelMode: mp3.JointStereo,
-			vbr:         mp3.VBR(0),
+			bitRateMode: mp3.VBR(0),
+			quality:     mp3.DefaultEncodingQuality,
 		},
 		{
 			inFile:      sample,
 			channelMode: mp3.JointStereo,
-			vbr:         mp3.VBR(9),
+			bitRateMode: mp3.VBR(9),
+			quality:     mp3.DefaultEncodingQuality,
 		},
 		{
 			inFile:      sample,
 			channelMode: mp3.Mono,
-			vbr:         mp3.VBR(9),
+			bitRateMode: mp3.VBR(9),
+			quality:     mp3.DefaultEncodingQuality,
 		},
 		{
 			inFile:      sample,
 			channelMode: mp3.Mono,
-			vbr:         mp3.VBR(9),
-			useQuality:  true,
+			bitRateMode: mp3.VBR(9),
 			quality:     9,
 		},
 		{
 			inFile:      sample,
 			channelMode: mp3.JointStereo,
-			vbr:         mp3.VBR(0),
-			useQuality:  true,
+			bitRateMode: mp3.VBR(0),
 			quality:     0,
 		},
 		{
 			inFile:      sample,
 			channelMode: mp3.JointStereo,
-			vbr:         mp3.VBR(0),
-			useQuality:  true,
+			bitRateMode: mp3.VBR(0),
 			quality:     9,
 		},
 		{
 			inFile:      sample,
 			channelMode: mp3.Stereo,
-			vbr:         mp3.VBR(0),
-			useQuality:  true,
+			bitRateMode: mp3.VBR(0),
 			quality:     3,
 		},
 	}
 
 	for i, test := range tests {
-		t.Logf("Test: %d of %d VBR: %d\n", i+1, len(tests), test.vbr)
+		t.Logf("Test: %d of %d VBR: %d\n", i+1, len(tests), test.bitRateMode)
 		inFile, _ := os.Open(test.inFile)
-		pumpAllocator := mp3.Source{Reader: inFile}
 
-		outFile, _ := os.Create(fmt.Sprintf("%s-%d-%s.mp3", out, i, test.vbr))
-		var quality *mp3.Quality
-		if test.useQuality {
-			quality = mp3.EncodingQuality(test.quality)
-		}
-		sinkAllocator := mp3.Sink{
-			Writer:          outFile,
-			ChannelMode:     test.channelMode,
-			BitRateMode:     test.vbr,
-			EncodingQuality: quality,
-		}
+		outFile, _ := os.Create(fmt.Sprintf("%s-%d-%s.mp3", out, i, test.bitRateMode))
 
 		line, _ := pipe.Routing{
-			Source: pumpAllocator.Pump(),
-			Sink:   sinkAllocator.Sink(),
+			Source: mp3.Source(inFile),
+			Sink: mp3.Sink(
+				outFile,
+				test.bitRateMode,
+				test.channelMode,
+				test.quality,
+			),
 		}.Line(bufferSize)
-		p := pipe.New(context.Background(), pipe.WithLines(line))
-		err := p.Wait()
+		err := pipe.New(
+			context.Background(),
+			pipe.WithLines(line),
+		).Wait()
 		if err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
