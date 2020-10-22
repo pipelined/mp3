@@ -44,9 +44,11 @@ func Source(r io.Reader) pipe.SourceAllocatorFunc {
 
 func source(decoder *mp3.Decoder, ints signal.Signed) pipe.SourceFunc {
 	return func(floats signal.Floating) (int, error) {
-		var read int // total number of read samples
+		var (
+			sample int16
+			read   int // total number of read samples
+		)
 		for read < ints.Len() {
-			var sample int16
 			if err := binary.Read(decoder, binary.LittleEndian, &sample); err != nil {
 				// because EOF returns only when nothing was read.
 				if err == io.EOF {
