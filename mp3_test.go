@@ -98,19 +98,23 @@ func TestMp3(t *testing.T) {
 
 		outFile, _ := os.Create(fmt.Sprintf("%s-%d-%s.mp3", out, i, test.bitRateMode))
 
-		line, _ := pipe.Routing{
-			Source: mp3.Source(inFile),
-			Sink: mp3.Sink(
-				outFile,
-				test.bitRateMode,
-				test.channelMode,
-				test.quality,
-			),
-		}.Line(bufferSize)
-		err := pipe.New(
-			context.Background(),
-			pipe.WithLines(line),
-		).Wait()
+		p, err := pipe.New(
+			bufferSize,
+			pipe.Routing{
+				Source: mp3.Source(inFile),
+				Sink: mp3.Sink(
+					outFile,
+					test.bitRateMode,
+					test.channelMode,
+					test.quality,
+				),
+			},
+		)
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+
+		err = p.Async(context.Background()).Await()
 		if err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}

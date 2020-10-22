@@ -13,15 +13,16 @@ import (
 	"github.com/viert/lame"
 
 	"pipelined.dev/pipe"
+	"pipelined.dev/pipe/mutable"
 	"pipelined.dev/signal"
 )
 
 // Source allows to read mp3 data.
 func Source(r io.Reader) pipe.SourceAllocatorFunc {
-	return func(bufferSize int) (pipe.Source, pipe.SignalProperties, error) {
+	return func(mctx mutable.Context, bufferSize int) (pipe.Source, error) {
 		decoder, err := mp3.NewDecoder(r)
 		if err != nil {
-			return pipe.Source{}, pipe.SignalProperties{}, fmt.Errorf("error creating MP3 decoder: %w", err)
+			return pipe.Source{}, fmt.Errorf("error creating MP3 decoder: %w", err)
 		}
 
 		// current decoder always provides stereo, so constant.
@@ -33,10 +34,10 @@ func Source(r io.Reader) pipe.SourceAllocatorFunc {
 		}.Int16(signal.BitDepth16)
 		return pipe.Source{
 				SourceFunc: source(decoder, ints),
-			},
-			pipe.SignalProperties{
-				Channels:   channels,
-				SampleRate: signal.SampleRate(decoder.SampleRate()),
+				Output: pipe.SignalProperties{
+					Channels:   channels,
+					SampleRate: signal.Frequency(decoder.SampleRate()),
+				},
 			},
 			nil
 	}
@@ -122,11 +123,12 @@ func setQuality(encoder *lame.LameWriter, q EncodingQuality) {
 		return
 	}
 
-	if q < 0 {
+	switch {
+	case q < 0:
 		encoder.Encoder.SetQuality(0)
-	} else if q > 9 {
+	case q > 9:
 		encoder.Encoder.SetQuality(9)
-	} else {
+	default:
 		encoder.Encoder.SetQuality(int(q))
 	}
 }
@@ -134,7 +136,7 @@ func setQuality(encoder *lame.LameWriter, q EncodingQuality) {
 // Sink allows to write mp3 files. Lame uses
 // 5 as default value if not provided.
 func Sink(w io.Writer, brm BitRateMode, cm ChannelMode, eq EncodingQuality) pipe.SinkAllocatorFunc {
-	return func(bufferSize int, props pipe.SignalProperties) (pipe.Sink, error) {
+	return func(mctx mutable.Context, bufferSize int, props pipe.SignalProperties) (pipe.Sink, error) {
 		encoder := lame.NewWriter(w)
 		brm.apply(encoder)
 		setQuality(encoder, eq)
