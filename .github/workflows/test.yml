@@ -20,7 +20,7 @@ jobs:
     - name:  Install lame
       run:   |
             if [ '$RUNNER_OS' == 'Linux' ]; then
-                  apt install lame
+                  sudo apt-get install -y lame
             elif [ '$RUNNER_OS' == 'Windows' ]; then
                   choco install lame
             elif [ '$RUNNER_OS' == 'macOS' ]; then
