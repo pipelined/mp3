@@ -100,7 +100,7 @@ func TestMp3(t *testing.T) {
 
 		p, err := pipe.New(
 			bufferSize,
-			pipe.Routing{
+			pipe.Line{
 				Source: mp3.Source(inFile),
 				Sink: mp3.Sink(
 					outFile,
@@ -114,7 +114,7 @@ func TestMp3(t *testing.T) {
 			t.Errorf("unexpected error: %v", err)
 		}
 
-		err = p.Async(context.Background()).Await()
+		err = pipe.Wait(p.Start(context.Background()))
 		if err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}

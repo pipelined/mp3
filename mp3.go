@@ -34,7 +34,7 @@ func Source(r io.Reader) pipe.SourceAllocatorFunc {
 		}.Int16(signal.BitDepth16)
 		return pipe.Source{
 				SourceFunc: source(decoder, ints),
-				Output: pipe.SignalProperties{
+				SignalProperties: pipe.SignalProperties{
 					Channels:   channels,
 					SampleRate: signal.Frequency(decoder.SampleRate()),
 				},
