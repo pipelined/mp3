@@ -17,16 +17,16 @@ jobs:
         go-version: 1.x
     - name: Checkout code
       uses: actions/checkout@v2
-    - name:  Install lame
-      run:   |
-            if [ '$RUNNER_OS' == 'Windows' ]; then
-                  choco install lame
-            elif [ '$RUNNER_OS' == 'macOS' ]; then
-                  brew install lame
-            fi
-      shell: bash
+    - name:  Install lame macOS
+      if: runner.os == 'macOS'
+      run: brew install lame
+    - name:  Install lame Linux
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt-get install -y lame
     - name: Test
-      run: go test --race --coverprofile=coverage.txt --covermode=atomic ./...
+      run: |
+        LDFLAGS=-L/usr/local/lib go test --race --coverprofile=coverage.txt --covermode=atomic ./...
     - name: Upload coverage
       uses: codecov/codecov-action@v1
       with:
